@@ -57,12 +57,12 @@ const matchCount = db.prepare('SELECT COUNT(*) as cnt FROM matches').get();
 if (matchCount.cnt === 0) {
   const seedMatches = [
     // GRUPO A
-    { match_number: 1,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'México',      away_team: 'Uruguay',      match_date: '2026-06-11', venue: 'Estadio Azteca',          city: 'Ciudad de México' },
-    { match_number: 2,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'Ecuador',     away_team: 'Ecuador',      match_date: '2026-06-11', venue: 'Rose Bowl',               city: 'Los Ángeles' },
-    { match_number: 3,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'México',      away_team: 'Ecuador',      match_date: '2026-06-15', venue: 'Estadio Azteca',          city: 'Ciudad de México' },
-    { match_number: 4,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'Uruguay',     away_team: 'Jamaica',      match_date: '2026-06-15', venue: 'AT&T Stadium',            city: 'Dallas' },
-    { match_number: 5,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'México',      away_team: 'Jamaica',      match_date: '2026-06-19', venue: 'Estadio Azteca',          city: 'Ciudad de México' },
-    { match_number: 6,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'Uruguay',     away_team: 'Ecuador',      match_date: '2026-06-19', venue: 'SoFi Stadium',            city: 'Los Ángeles' },
+    { match_number: 1,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'México',      away_team: 'Sudáfrica',      match_date: '2026-06-11', venue: 'Estadio Azteca',          city: 'Ciudad de México' },
+    { match_number: 2,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'Corea del Sur',     away_team: 'República Checa',      match_date: '2026-06-11', venue: 'Rose Bowl',               city: 'Los Ángeles' },
+    { match_number: 3,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'República Checa',      away_team: 'Sudáfrica',      match_date: '2026-06-15', venue: 'Estadio Azteca',          city: 'Ciudad de México' },
+    { match_number: 4,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'México',     away_team: 'Corea del Sur',      match_date: '2026-06-15', venue: 'AT&T Stadium',            city: 'Dallas' },
+    { match_number: 5,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'República Checa',      away_team: 'México',      match_date: '2026-06-19', venue: 'Estadio Azteca',          city: 'Ciudad de México' },
+    { match_number: 6,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'Sudáfrica',     away_team: 'Corea del Sur',      match_date: '2026-06-19', venue: 'SoFi Stadium',            city: 'Los Ángeles' },
     // GRUPO B
     { match_number: 7,  stage: 'Fase de Grupos', group_name: 'B', home_team: 'España',      away_team: 'Marruecos',    match_date: '2026-06-11', venue: 'MetLife Stadium',         city: 'Nueva York' },
     { match_number: 8,  stage: 'Fase de Grupos', group_name: 'B', home_team: 'Brasil',      away_team: 'Croacia',      match_date: '2026-06-12', venue: 'SoFi Stadium',            city: 'Los Ángeles' },

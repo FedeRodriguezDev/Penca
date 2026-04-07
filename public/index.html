@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚽ Penca Mundial 2026</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="auth-screen hidden">
+  <div class="auth-bg"></div>
+  <div class="auth-card">
+    <div class="auth-logo">⚽</div>
+    <h1 class="auth-title">Penca Mundial 2026</h1>
+    <p class="auth-subtitle">USA · CANADÁ · MÉXICO</p>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="showAuthTab('login')">Iniciar Sesión</button>
+      <button class="auth-tab" onclick="showAuthTab('register')">Registrarse</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="login-form">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary btn-full" onclick="login()">Entrar</button>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="register-form" class="hidden">
+      <div class="field">
+        <label>Nombre de usuario</label>
+        <input type="text" id="reg-username" placeholder="Tu apodo en la penca">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+      </div>
+      <button class="btn-primary btn-full" onclick="register()">Crear Cuenta</button>
+    </div>
+
+    <div id="auth-msg" class="auth-msg hidden"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" class="hidden">
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="nav-brand">⚽ <span>Penca Mundial 2026</span></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showPage('matches')" data-page="matches">Partidos</button>
+      <button class="nav-tab" onclick="showPage('leaderboard')" data-page="leaderboard">Tabla</button>
+      <button class="nav-tab" id="admin-tab" onclick="showPage('admin')" data-page="admin" style="display:none">Admin</button>
+    </div>
+    <div class="nav-user">
+      <span id="nav-username"></span>
+      <button class="btn-logout" onclick="logout()">Salir</button>
+    </div>
+  </nav>
+
+  <!-- PAGES -->
+  <main class="main-content">
+
+    <!-- MATCHES PAGE -->
+    <div id="page-matches" class="page">
+      <div class="page-header">
+        <h2>Mis Pronósticos</h2>
+        <p class="page-desc">Completá el marcador de cada partido antes de que empiece. <strong>Exacto = 3 pts · Resultado = 1 pt</strong></p>
+      </div>
+      <div class="group-filter" id="group-filter"></div>
+      <div id="matches-container"></div>
+    </div>
+
+    <!-- LEADERBOARD PAGE -->
+    <div id="page-leaderboard" class="page hidden">
+      <div class="page-header">
+        <h2>Tabla de Posiciones</h2>
+      </div>
+      <div id="stats-bar" class="stats-bar"></div>
+      <div id="leaderboard-container"></div>
+    </div>
+
+    <!-- ADMIN PAGE -->
+    <div id="page-admin" class="page hidden">
+      <div class="page-header">
+        <h2>Panel de Administrador</h2>
+        <p class="page-desc">Cargá los resultados de los partidos para actualizar los puntos automáticamente.</p>
+      </div>
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="showAdminTab('results')">Cargar Resultados</button>
+        <button class="admin-tab" onclick="showAdminTab('add-match')">Agregar Partido</button>
+        <button class="admin-tab" onclick="showAdminTab('users')">Usuarios</button>
+      </div>
+      <div id="admin-results" class="admin-section">
+        <div id="admin-matches-list"></div>
+      </div>
+      <div id="admin-add-match" class="admin-section hidden">
+        <div class="card">
+          <h3>Agregar Partido (Eliminatorias)</h3>
+          <div class="grid-2">
+            <div class="field"><label>Número de partido</label><input type="number" id="am-num" placeholder="73"></div>
+            <div class="field"><label>Fase</label>
+              <select id="am-stage">
+                <option>Ronda de 32</option><option>Octavos de Final</option>
+                <option>Cuartos de Final</option><option>Semifinal</option>
+                <option>Tercer Puesto</option><option>Final</option>
+              </select>
+            </div>
+            <div class="field"><label>Equipo Local</label><input type="text" id="am-home" placeholder="Argentina"></div>
+            <div class="field"><label>Equipo Visitante</label><input type="text" id="am-away" placeholder="Brasil"></div>
+            <div class="field"><label>Fecha</label><input type="date" id="am-date"></div>
+            <div class="field"><label>Sede</label><input type="text" id="am-venue" placeholder="MetLife Stadium"></div>
+            <div class="field"><label>Ciudad</label><input type="text" id="am-city" placeholder="Nueva York"></div>
+          </div>
+          <button class="btn-primary" onclick="addMatch()">Agregar Partido</button>
+          <div id="admin-add-msg" class="auth-msg hidden" style="margin-top:12px"></div>
+        </div>
+      </div>
+      <div id="admin-users" class="admin-section hidden">
+        <div id="users-list"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

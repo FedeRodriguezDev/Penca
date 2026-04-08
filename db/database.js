@@ -166,7 +166,6 @@ function calculatePoints(predHome, predAway, realHome, realAway) {
 
 module.exports = { db, calculatePoints };
 
-const fs = require('fs');
 const dbPath = path.join(DB_DIR, 'penca.db');
 
 if (fs.existsSync(dbPath)) {

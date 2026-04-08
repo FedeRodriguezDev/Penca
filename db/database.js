@@ -171,5 +171,5 @@ const dbPath = path.join(DB_DIR, 'penca.db');
 
 if (fs.existsSync(dbPath)) {
   fs.unlinkSync(dbPath);
-  console.log("DB eliminada para recreación");
+  console.log("db eliminada para recreación");
 }

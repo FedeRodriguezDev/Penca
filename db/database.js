@@ -2,12 +2,14 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const DB_DIR = path.join(__dirname, '..', 'data');
+const files = fs.readdirSync(DB_DIR);
 
-console.log("Archivos en data:");
-console.log(fs.readdirSync(DB_DIR));
-
-if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+files.forEach(file => {
+  if (file.includes('penca')) {
+    fs.unlinkSync(path.join(DB_DIR, file));
+    console.log("Eliminado:", file);
+  }
+});
 
 const db = new Database(path.join(DB_DIR, 'penca.db'));
 

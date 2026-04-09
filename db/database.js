@@ -1,14 +1,12 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
-const path = require('path');
 
 const DB_DIR = path.join(__dirname, '..', 'data');
 
 console.log("Archivos en data:");
 console.log(fs.readdirSync(DB_DIR));
 
-const DB_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
 const db = new Database(path.join(DB_DIR, 'penca.db'));

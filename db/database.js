@@ -2,31 +2,24 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-// 📁 Definir directorio de la base de datos
 const DB_DIR = path.join(__dirname, '..', 'data');
 
-// 📁 Asegurar que exista la carpeta
 if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
-// 🧹 LIMPIEZA TEMPORAL (solo para Railway / debugging)
-const files = fs.readdirSync(DB_DIR);
-
-files.forEach(file => {
-  if (file.includes('penca')) {
-    fs.unlinkSync(path.join(DB_DIR, file));
-    console.log("Eliminado:", file);
-  }
-});
-
-// 🗄️ Crear / conectar base de datos
 const dbPath = path.join(DB_DIR, 'penca.db');
-console.log("Usando DB:", dbPath);
+
+// 🔥 SOLO borra si vos lo activás
+if (process.env.RESET_DB === 'true') {
+  if (fs.existsSync(dbPath)) {
+    fs.unlinkSync(dbPath);
+    console.log("🧹 DB eliminada por RESET_DB");
+  }
+}
 
 const db = new Database(dbPath);
 
-// ⚙️ Configuración SQLite
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.exec(`

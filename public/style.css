@@ -10,7 +10,7 @@
   --bg-card: #203E63;
   --bg-card2: #1e3826;
   --text: #e8f5e9;
-  --text-muted: #7fb98a;
+  --text-muted: #fff;
   --border: #2a4a30;
   --red: #e53935;
   --blue: #1976d2;
@@ -312,7 +312,7 @@ button { cursor: pointer; font-family: inherit; }
 }
 .vs-badge {
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: #FFCE43;
   font-weight: 700;
 }
 

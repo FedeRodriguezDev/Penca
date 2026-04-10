@@ -159,7 +159,7 @@ button { cursor: pointer; font-family: inherit; }
   display: flex;
   align-items: center;
   padding: 0 24px;
-  height: 60px;
+  height: 100px;
   gap: 24px;
   position: sticky;
   top: 0;

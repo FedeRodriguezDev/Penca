@@ -69,7 +69,7 @@ const matchCount = db.prepare('SELECT COUNT(*) as cnt FROM matches').get();
 if (matchCount.cnt === 0) {
   const seedMatches = [
     // GRUPO A
-    { match_number: 1,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'México',      away_team: 'Sudáfrica',      match_date: '2026-06-11', venue: 'Estadio Azteca',          city: 'Ciudad de México' },
+    { match_number: 1,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'México',      away_team: 'Sudáfrica',      match_date: '2026-06-11', venue: 'Estadio Ciudad de México',          city: 'Ciudad de México' },
     { match_number: 2,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'Corea del Sur',     away_team: 'República Checa',      match_date: '2026-06-11', venue: 'Rose Bowl',               city: 'Los Ángeles' },
     { match_number: 3,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'República Checa',      away_team: 'Sudáfrica',      match_date: '2026-06-18', venue: 'Estadio Azteca',          city: 'Ciudad de México' },
     { match_number: 4,  stage: 'Fase de Grupos', group_name: 'A', home_team: 'México',     away_team: 'Corea del Sur',      match_date: '2026-06-18', venue: 'AT&T Stadium',            city: 'Dallas' },

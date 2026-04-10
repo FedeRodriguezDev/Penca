@@ -216,9 +216,9 @@ button { cursor: pointer; font-family: inherit; }
   margin-bottom: 20px;
 }
 .filter-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  background: #203E63;
+  border: 1px solid #FFCE43;
+  color: #fff;
   padding: 5px 14px;
   border-radius: 20px;
   font-size: 0.82rem;
@@ -226,7 +226,7 @@ button { cursor: pointer; font-family: inherit; }
   cursor: pointer;
   transition: all 0.2s;
 }
-.filter-btn:hover, .filter-btn.active { background: var(--green); border-color: var(--green); color: white; }
+.filter-btn:hover, .filter-btn.active { background: #FFCE43; border-color: #fff; color: #203E63; }
 
 /* ===== MATCH CARDS ===== */
 .group-section { margin-bottom: 32px; }

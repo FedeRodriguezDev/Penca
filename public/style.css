@@ -337,7 +337,6 @@ button { cursor: pointer; font-family: inherit; }
   color: var(--text);
   font-size: 1rem;
   font-weight: 700;
-  -moz-appearance: textfield;
 }
 .score-input::-webkit-inner-spin-button, .score-input::-webkit-outer-spin-button { -webkit-appearance: none; }
 .score-input:focus { outline: none; border-color: var(--green-light); }

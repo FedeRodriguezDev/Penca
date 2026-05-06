@@ -282,9 +282,30 @@ button { cursor: pointer; font-family: inherit; }
 
 .match-body {
   display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  align-items: stretch;
+  gap: 14px;
+}
+.match-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.match-body-row {
+  display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
+}
+.team-crest-rail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.team-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .team {
   display: flex;
@@ -295,6 +316,49 @@ button { cursor: pointer; font-family: inherit; }
 }
 .team.home { justify-content: flex-end; text-align: right; }
 .team.away { justify-content: flex-start; }
+.team-name {
+  display: block;
+  line-height: 1.2;
+}
+.team-crest {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  flex: 0 0 56px;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.25));
+}
+.team-crest-placeholder {
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--gold-light);
+}
+.team-prediction-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.predictions-row {
+  margin-top: 2px;
+}
+.team-column.home .team-prediction-field {
+  align-items: flex-end;
+}
+.team-column.away .team-prediction-field {
+  align-items: flex-start;
+}
+.team-prediction-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
 
 .match-center {
   display: flex;
@@ -322,6 +386,9 @@ button { cursor: pointer; font-family: inherit; }
   gap: 6px;
   margin-top: 2px;
 }
+.prediction-row-inline {
+  justify-content: center;
+}
 .pred-label {
   font-size: 0.72rem;
   color: var(--text-muted);
@@ -340,8 +407,58 @@ button { cursor: pointer; font-family: inherit; }
 }
 .score-input::-webkit-inner-spin-button, .score-input::-webkit-outer-spin-button { -webkit-appearance: none; }
 .score-input:focus { outline: none; border-color: var(--green-light); }
-.score-dash { color: var(--text-muted); font-weight: 700; }
-.btn-save { padding: 6px 14px; font-size: 0.78rem; border-radius: 6px; }
+.match-footer {
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .match-body {
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    gap: 10px;
+  }
+
+  .match-body-row {
+    grid-template-columns: 1fr auto 1fr;
+    gap: 10px;
+  }
+
+  .team-column,
+  .team-column.home,
+  .team-column.away {
+    align-items: center;
+  }
+
+  .team,
+  .team.home,
+  .team.away {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .team.home {
+    justify-content: flex-end;
+  }
+
+  .team-crest {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+
+  .team-name {
+    font-size: 0.88rem;
+  }
+
+  .team-prediction-field,
+  .team-column.home .team-prediction-field,
+  .team-column.away .team-prediction-field {
+    align-items: center;
+  }
+
+  .predictions-row .prediction-center-spacer {
+    min-width: 34px;
+  }
+}
 
 /* Points badge */
 .points-badge {

@@ -8,6 +8,10 @@ let currentUser = null;
 let allMatches = {};
 let activeGroup = 'all';
 let toastTimer = null;
+let currentPage = 'matches';
+let pageRefreshTimer = null;
+const UTC_MINUS_3_OFFSET_MS = -3 * 60 * 60 * 1000;
+const PAGE_AUTO_REFRESH_MS = 60 * 1000;
 
 // ──────────────────────────────────────────
 // BOOTSTRAP
@@ -107,39 +111,75 @@ function logout() {
 // NAVIGATION
 // ──────────────────────────────────────────
 function showPage(page) {
+  currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById(`page-${page}`).classList.remove('hidden');
   const navTab = document.querySelector(`[data-page="${page}"]`);
   if (navTab) navTab.classList.add('active');
+  resetPageAutoRefresh(page);
 
   if (page === 'matches') loadMatches();
   if (page === 'leaderboard') loadLeaderboard();
   if (page === 'admin') loadAdmin();
 }
 
+function resetPageAutoRefresh(page) {
+  if (pageRefreshTimer) {
+    window.clearInterval(pageRefreshTimer);
+    pageRefreshTimer = null;
+  }
+
+  if (!['matches', 'leaderboard'].includes(page)) return;
+
+  pageRefreshTimer = window.setInterval(() => {
+    if (document.hidden || currentPage !== page) return;
+    if (page === 'matches' && document.activeElement?.classList?.contains('score-input')) return;
+
+    if (page === 'matches') loadMatches({ silent: true, preserveScroll: true });
+    if (page === 'leaderboard') loadLeaderboard({ silent: true, preserveScroll: true });
+  }, PAGE_AUTO_REFRESH_MS);
+}
+
+function restoreScrollPosition(scrollY) {
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ top: scrollY, behavior: 'auto' });
+  });
+}
+
 // ──────────────────────────────────────────
 // MATCHES PAGE
 // ──────────────────────────────────────────
-async function loadMatches() {
+async function loadMatches({ silent = false, preserveScroll = false } = {}) {
   const container = document.getElementById('matches-container');
-  container.innerHTML = loadingHtml();
+  const scrollY = preserveScroll ? window.scrollY : null;
+  if (!silent) {
+    container.innerHTML = loadingHtml();
+  }
   try {
     const data = await apiFetch('/matches/groups');
     allMatches = data;
     renderGroupFilter(data);
     renderMatches(data);
+    if (preserveScroll && scrollY !== null) {
+      restoreScrollPosition(scrollY);
+    }
   } catch (err) {
-    container.innerHTML = `<div class="empty">Error cargando partidos: ${err.message}</div>`;
+    if (!silent) {
+      container.innerHTML = `<div class="empty">Error cargando partidos: ${err.message}</div>`;
+    }
   }
 }
 
 function renderGroupFilter(data) {
   const filter = document.getElementById('group-filter');
   const groups = Object.keys(data);
+  if (activeGroup !== 'all' && !groups.includes(activeGroup)) {
+    activeGroup = 'all';
+  }
   filter.innerHTML = `
-    <button class="filter-btn active" onclick="filterGroup('all')">Todos</button>
-    ${groups.map(g => `<button class="filter-btn" onclick="filterGroup('${g}')">${g}</button>`).join('')}
+    <button class="filter-btn ${activeGroup === 'all' ? 'active' : ''}" onclick="filterGroup('all')">Todos</button>
+    ${groups.map(g => `<button class="filter-btn ${activeGroup === g ? 'active' : ''}" onclick="filterGroup('${g}')">${g}</button>`).join('')}
   `;
 }
 
@@ -166,11 +206,19 @@ function renderMatches(data) {
   }).join('');
 }
 
+function renderTeamCrest(url, teamName) {
+  if (!url) {
+    return `<div class="team-crest team-crest-placeholder" aria-hidden="true">${teamName.slice(0, 1)}</div>`;
+  }
+
+  return `<img class="team-crest" src="${url}" alt="Escudo de ${teamName}" loading="lazy">`;
+}
+
 function renderMatchCard(m) {
-  const canPredict = m.status === 'upcoming';
+  const canPredict = Boolean(m.can_predict);
   const statusLabel = { upcoming: 'PRÓXIMO', live: 'EN VIVO', finished: 'FINALIZADO' }[m.status] || m.status;
   const statusClass = `status-${m.status}`;
-  const dateStr = m.match_date ? formatDate(m.match_date) : 'Fecha TBD';
+  const dateStr = formatMatchDateTime(m);
 
   const hasPred = m.pred_home !== null && m.pred_home !== undefined;
   const predScore = hasPred ? `${m.pred_home} - ${m.pred_away}` : '';
@@ -183,33 +231,41 @@ function renderMatchCard(m) {
     pointsHtml = `<span class="points-badge ${cls}">${label}</span>`;
   } else if (m.status === 'finished' && !hasPred) {
     pointsHtml = `<span class="points-badge pts-0">❌ Sin pronóstico</span>`;
-  } else if (hasPred && m.status === 'upcoming') {
+  } else if (hasPred && canPredict) {
     pointsHtml = `<span class="points-badge pts-pending">✏️ ${predScore}</span>`;
   }
 
-  const realScoreHtml = m.status !== 'upcoming'
+  const realScoreHtml = !canPredict
     ? `<div class="real-score">${m.home_score ?? '-'} - ${m.away_score ?? '-'}</div>`
     : `<div class="vs-badge">VS</div>`;
 
-  let predictionHtml = '';
-  if (canPredict) {
-    predictionHtml = `
-      <div class="prediction-row">
-        <span class="pred-label">Mi pronóstico:</span>
+  const homePredictionField = canPredict
+    ? `
+      <div class="team-prediction-field">
+        <span class="team-prediction-label">Tu gol</span>
         <input class="score-input" type="number" id="ph-${m.id}" min="0" max="20" value="${hasPred ? m.pred_home : ''}" placeholder="-">
-        <span class="score-dash">-</span>
-        <input class="score-input" type="number" id="pa-${m.id}" min="0" max="20" value="${hasPred ? m.pred_away : ''}" placeholder="-">
-        <button class="btn-gold btn-small btn-save" onclick="savePrediction(${m.id})">Guardar</button>
       </div>
-    `;
-  } else if (hasPred) {
+    `
+    : '';
+
+  const awayPredictionField = canPredict
+    ? `
+      <div class="team-prediction-field">
+        <span class="team-prediction-label">Tu gol</span>
+        <input class="score-input" type="number" id="pa-${m.id}" min="0" max="20" value="${hasPred ? m.pred_away : ''}" placeholder="-">
+      </div>
+    `
+    : '';
+
+  let predictionHtml = '';
+  if (hasPred && !canPredict) {
     predictionHtml = `<div class="pred-display">Mi pronóstico: <span>${predScore}</span></div>`;
-  } else if (m.status !== 'upcoming') {
+  } else if (!canPredict) {
     predictionHtml = `<div class="pred-display" style="color:#666">No pronosticaste</div>`;
   }
 
   return `
-    <div class="match-card ${m.status !== 'upcoming' ? 'finished' : ''}" id="mc-${m.id}">
+    <div class="match-card ${!canPredict ? 'finished' : ''}" id="mc-${m.id}">
       <div class="match-header">
         <div class="match-meta">
           <strong>#${m.match_number}</strong> · ${dateStr}
@@ -219,13 +275,86 @@ function renderMatchCard(m) {
         ${pointsHtml}
       </div>
       <div class="match-body">
-        <div class="team home"><span>${m.home_team}</span></div>
-        <div class="match-center">${realScoreHtml}</div>
-        <div class="team away"><span>${m.away_team}</span></div>
+        <div class="team-crest-rail home">
+          ${renderTeamCrest(m.home_flag, m.home_team)}
+        </div>
+        <div class="match-main">
+          <div class="match-body-row teams-row">
+            <div class="team-column home">
+              <div class="team home">
+                <span class="team-name">${m.home_team}</span>
+              </div>
+            </div>
+            <div class="match-center">${realScoreHtml}</div>
+            <div class="team-column away">
+              <div class="team away">
+                <span class="team-name">${m.away_team}</span>
+              </div>
+            </div>
+          </div>
+          <div class="match-body-row predictions-row ${canPredict ? '' : 'hidden'}" id="pr-${m.id}" data-match-id="${m.id}" data-last-home="${hasPred ? m.pred_home : ''}" data-last-away="${hasPred ? m.pred_away : ''}" onfocusout="queueAutoSavePrediction(${m.id})">
+            <div class="team-column home">
+              ${homePredictionField}
+            </div>
+            <div class="match-center prediction-center-spacer"></div>
+            <div class="team-column away">
+              ${awayPredictionField}
+            </div>
+          </div>
+        </div>
+        <div class="team-crest-rail away">
+          ${renderTeamCrest(m.away_flag, m.away_team)}
+        </div>
       </div>
-      <div style="margin-top:12px">${predictionHtml}</div>
+      ${predictionHtml ? `<div class="match-footer">${predictionHtml}</div>` : ''}
     </div>
   `;
+}
+
+function queueAutoSavePrediction(matchId) {
+  window.setTimeout(() => {
+    const predictionRow = document.getElementById(`pr-${matchId}`);
+    if (!predictionRow) return;
+    if (predictionRow.contains(document.activeElement)) return;
+    autoSavePrediction(matchId);
+  }, 0);
+}
+
+async function autoSavePrediction(matchId) {
+  const predictionRow = document.getElementById(`pr-${matchId}`);
+  if (!predictionRow || predictionRow.dataset.saving === 'true') return;
+
+  const homeInput = document.getElementById(`ph-${matchId}`);
+  const awayInput = document.getElementById(`pa-${matchId}`);
+  if (!homeInput || !awayInput) return;
+
+  const homeValue = homeInput.value.trim();
+  const awayValue = awayInput.value.trim();
+
+  if (!homeValue && !awayValue) return;
+  if (!homeValue || !awayValue) return;
+  if (predictionRow.dataset.lastHome === homeValue && predictionRow.dataset.lastAway === awayValue) return;
+
+  predictionRow.dataset.saving = 'true';
+  homeInput.disabled = true;
+  awayInput.disabled = true;
+
+  try {
+    await apiFetch('/predictions', 'POST', {
+      match_id: matchId,
+      home_score: Number.parseInt(homeValue, 10),
+      away_score: Number.parseInt(awayValue, 10),
+    });
+    predictionRow.dataset.lastHome = homeValue;
+    predictionRow.dataset.lastAway = awayValue;
+    showToast('Pronóstico guardado ✅');
+    await loadMatches({ silent: true, preserveScroll: true });
+  } catch (err) {
+    homeInput.disabled = false;
+    awayInput.disabled = false;
+    predictionRow.dataset.saving = 'false';
+    showToast(err.message, true);
+  }
 }
 
 async function savePrediction(matchId) {
@@ -244,8 +373,11 @@ async function savePrediction(matchId) {
 // ──────────────────────────────────────────
 // LEADERBOARD PAGE
 // ──────────────────────────────────────────
-async function loadLeaderboard() {
-  document.getElementById('leaderboard-container').innerHTML = loadingHtml();
+async function loadLeaderboard({ silent = false, preserveScroll = false } = {}) {
+  const scrollY = preserveScroll ? window.scrollY : null;
+  if (!silent) {
+    document.getElementById('leaderboard-container').innerHTML = loadingHtml();
+  }
   try {
     const [leaders, stats] = await Promise.all([
       apiFetch('/leaderboard'),
@@ -253,8 +385,13 @@ async function loadLeaderboard() {
     ]);
     renderStats(stats);
     renderLeaderboard(leaders);
+    if (preserveScroll && scrollY !== null) {
+      restoreScrollPosition(scrollY);
+    }
   } catch (err) {
-    document.getElementById('leaderboard-container').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+    if (!silent) {
+      document.getElementById('leaderboard-container').innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+    }
   }
 }
 
@@ -313,14 +450,18 @@ async function loadAdminMatches() {
   try {
     const matches = await apiFetch('/admin/matches');
     if (!matches.length) { container.innerHTML = '<div class="empty">No hay partidos</div>'; return; }
+    const statusColors = { finished: '#888', live: '#ff8a8a', upcoming: 'var(--green-light)' };
     container.innerHTML = matches.map(m => `
       <div class="admin-match-card">
         <div class="admin-match-info">
           <div class="admin-match-teams">#${m.match_number} ${m.home_team} vs ${m.away_team}</div>
-          <div class="admin-match-meta">${m.stage}${m.group_name ? ` · Grupo ${m.group_name}` : ''} · ${m.match_date || 'Sin fecha'} · <span style="color:${m.status === 'finished' ? '#888' : 'var(--green-light)'}">${m.status}</span></div>
+          <div class="admin-match-meta">${m.stage}${m.group_name ? ` · Grupo ${m.group_name}` : ''} · ${formatMatchDateTime(m)} · <span style="color:${statusColors[m.status] || 'var(--green-light)'}">${m.status}</span></div>
           ${m.status === 'finished' ? `<div class="result-saved">✅ Resultado: ${m.home_score} - ${m.away_score}</div>` : ''}
         </div>
         <div class="admin-result-form">
+          <input type="date" id="md-${m.id}" value="${getInputDateValue(m)}">
+          <input type="time" id="mt-${m.id}" value="${getInputTimeValue(m)}">
+          <button class="btn-small" onclick="saveMatchSchedule(${m.id})">Guardar horario</button>
           <input class="score-input" type="number" id="ah-${m.id}" min="0" max="30" value="${m.home_score ?? ''}" placeholder="0">
           <span class="score-dash">-</span>
           <input class="score-input" type="number" id="aa-${m.id}" min="0" max="30" value="${m.away_score ?? ''}" placeholder="0">
@@ -346,6 +487,26 @@ async function saveResult(matchId) {
   }
 }
 
+async function saveMatchSchedule(matchId) {
+  const match_date = document.getElementById(`md-${matchId}`).value;
+  const match_time = document.getElementById(`mt-${matchId}`).value;
+
+  if (match_time && !match_date) {
+    return showToast('Cargá una fecha junto con la hora', true);
+  }
+
+  try {
+    await apiFetch(`/admin/match/${matchId}`, 'PUT', {
+      match_date: match_date || null,
+      match_time: match_time || null,
+    });
+    showToast('Horario actualizado ✅');
+    loadAdminMatches();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
 async function addMatch() {
   const body = {
     match_number: parseInt(document.getElementById('am-num').value),
@@ -353,12 +514,19 @@ async function addMatch() {
     home_team: document.getElementById('am-home').value.trim(),
     away_team: document.getElementById('am-away').value.trim(),
     match_date: document.getElementById('am-date').value,
+    match_time: document.getElementById('am-time').value,
     venue: document.getElementById('am-venue').value.trim(),
     city: document.getElementById('am-city').value.trim(),
   };
   const msg = document.getElementById('admin-add-msg');
   if (!body.match_number || !body.home_team || !body.away_team) {
     msg.textContent = 'Completá los campos requeridos';
+    msg.className = 'auth-msg error';
+    msg.classList.remove('hidden');
+    return;
+  }
+  if (body.match_time && !body.match_date) {
+    msg.textContent = 'Si cargás hora, también tenés que cargar la fecha';
     msg.className = 'auth-msg error';
     msg.classList.remove('hidden');
     return;
@@ -453,6 +621,50 @@ function formatDate(dateStr) {
     const d = new Date(dateStr + 'T12:00:00');
     return d.toLocaleDateString('es-UY', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch { return dateStr; }
+}
+
+function getUtcMinus3Parts(kickoffAt) {
+  if (!kickoffAt) return null;
+  const kickoff = new Date(kickoffAt);
+  if (Number.isNaN(kickoff.getTime())) return null;
+
+  const shifted = new Date(kickoff.getTime() + UTC_MINUS_3_OFFSET_MS);
+  const year = shifted.getUTCFullYear();
+  const month = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(shifted.getUTCDate()).padStart(2, '0');
+  const hours = String(shifted.getUTCHours()).padStart(2, '0');
+  const minutes = String(shifted.getUTCMinutes()).padStart(2, '0');
+
+  return {
+    date: `${year}-${month}-${day}`,
+    time: `${hours}:${minutes}`,
+    shifted,
+  };
+}
+
+function getInputDateValue(match) {
+  return getUtcMinus3Parts(match.kickoff_at)?.date || match.match_date || '';
+}
+
+function getInputTimeValue(match) {
+  return getUtcMinus3Parts(match.kickoff_at)?.time || (match.match_time ? match.match_time.slice(0, 5) : '');
+}
+
+function formatMatchDateTime(match) {
+  const utcMinus3 = getUtcMinus3Parts(match.kickoff_at);
+  if (utcMinus3) {
+    const formattedDate = utcMinus3.shifted.toLocaleDateString('es-UY', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+    return `${formattedDate} · ${utcMinus3.time} UTC-3`;
+  }
+
+  if (!match.match_date) return 'Fecha TBD';
+  const formattedDate = formatDate(match.match_date);
+  return match.match_time ? `${formattedDate} · ${match.match_time.slice(0, 5)} UTC-3` : formattedDate;
 }
 
 function loadingHtml() {

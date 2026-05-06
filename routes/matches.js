@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db/database');
+const { db, serializeMatch } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
@@ -12,7 +12,7 @@ router.get('/', authMiddleware, (req, res) => {
     FROM matches m
     LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = ?
     ORDER BY m.match_number ASC
-  `).all(req.user.id);
+  `).all(req.user.id).map((match) => serializeMatch(match));
   res.json(matches);
 });
 
@@ -24,7 +24,7 @@ router.get('/groups', authMiddleware, (req, res) => {
     FROM matches m
     LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = ?
     ORDER BY m.match_number ASC
-  `).all(req.user.id);
+  `).all(req.user.id).map((match) => serializeMatch(match));
 
   const grouped = {};
   for (const m of matches) {

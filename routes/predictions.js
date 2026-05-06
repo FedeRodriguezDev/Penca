@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db/database');
+const { db, getEffectiveMatchStatus } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
@@ -16,8 +16,9 @@ router.post('/', authMiddleware, (req, res) => {
 
   const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(match_id);
   if (!match) return res.status(404).json({ error: 'Partido no encontrado' });
-  if (match.status === 'finished') {
-    return res.status(400).json({ error: 'El partido ya terminó, no se puede pronosticar' });
+  const effectiveStatus = getEffectiveMatchStatus(match);
+  if (effectiveStatus !== 'upcoming') {
+    return res.status(400).json({ error: 'El partido ya empezó, no se puede pronosticar' });
   }
 
   try {

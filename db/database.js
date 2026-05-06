@@ -2,6 +2,8 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
+const UTC_MINUS_3_OFFSET_MS = -3 * 60 * 60 * 1000;
+
 const DB_DIR = path.join(__dirname, '..', 'data');
 
 if (!fs.existsSync(DB_DIR)) {
@@ -42,10 +44,13 @@ db.exec(`
     home_flag TEXT DEFAULT '',
     away_flag TEXT DEFAULT '',
     match_date TEXT,
+    match_time TEXT,
+    kickoff_at TEXT,
     venue TEXT,
     city TEXT,
     home_score INTEGER,
     away_score INTEGER,
+    external_event_id TEXT,
     status TEXT DEFAULT 'upcoming'
   );
 
@@ -62,7 +67,25 @@ db.exec(`
     FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
     UNIQUE(user_id, match_id)
   );
+
+  CREATE TABLE IF NOT EXISTS app_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
+
+function ensureColumnExists(tableName, columnName, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  if (!columns.some((column) => column.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
+ensureColumnExists('matches', 'match_time', 'TEXT');
+ensureColumnExists('matches', 'kickoff_at', 'TEXT');
+ensureColumnExists('matches', 'external_event_id', 'TEXT');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_external_event_id ON matches(external_event_id) WHERE external_event_id IS NOT NULL');
 
 // Seed group stage matches if not already loaded
 const matchCount = db.prepare('SELECT COUNT(*) as cnt FROM matches').get();
@@ -155,12 +178,17 @@ if (matchCount.cnt === 0) {
   ];
 
   const insertMatch = db.prepare(`
-    INSERT INTO matches (match_number, stage, group_name, home_team, away_team, match_date, venue, city, status)
-    VALUES (@match_number, @stage, @group_name, @home_team, @away_team, @match_date, @venue, @city, 'upcoming')
+    INSERT INTO matches (match_number, stage, group_name, home_team, away_team, match_date, match_time, venue, city, status)
+    VALUES (@match_number, @stage, @group_name, @home_team, @away_team, @match_date, @match_time, @venue, @city, 'upcoming')
   `);
 
   const insertMany = db.transaction((matches) => {
-    for (const m of matches) insertMatch.run(m);
+    for (const m of matches) {
+      insertMatch.run({
+        ...m,
+        match_time: m.match_time ?? null,
+      });
+    }
   });
 
   insertMany(seedMatches);
@@ -176,4 +204,98 @@ function calculatePoints(predHome, predAway, realHome, realAway) {
   return 0;
 }
 
-module.exports = { db, calculatePoints };
+function normalizeMatchTime(matchTime) {
+  if (!matchTime) return null;
+  const value = String(matchTime).trim();
+  if (/^\d{2}:\d{2}$/.test(value)) return `${value}:00`;
+  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value;
+  return null;
+}
+
+function normalizeKickoffAt(kickoffAt) {
+  if (!kickoffAt) return null;
+  const normalizedInput = typeof kickoffAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(kickoffAt.trim())
+    ? `${kickoffAt.trim()}Z`
+    : kickoffAt;
+  const kickoff = kickoffAt instanceof Date ? kickoffAt : new Date(normalizedInput);
+  return Number.isNaN(kickoff.getTime()) ? null : kickoff.toISOString();
+}
+
+function getUtcMinus3DateParts(kickoffAt) {
+  const normalizedKickoffAt = normalizeKickoffAt(kickoffAt);
+  if (!normalizedKickoffAt) return null;
+
+  const shifted = new Date(new Date(normalizedKickoffAt).getTime() + UTC_MINUS_3_OFFSET_MS);
+  const year = shifted.getUTCFullYear();
+  const month = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(shifted.getUTCDate()).padStart(2, '0');
+  const hours = String(shifted.getUTCHours()).padStart(2, '0');
+  const minutes = String(shifted.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(shifted.getUTCSeconds()).padStart(2, '0');
+
+  return {
+    match_date: `${year}-${month}-${day}`,
+    match_time: `${hours}:${minutes}:${seconds}`,
+  };
+}
+
+function buildKickoffAtFromLocal(matchDate, matchTime) {
+  if (!matchDate || !matchTime) return null;
+  const normalizedTime = normalizeMatchTime(matchTime);
+  if (!normalizedTime) return null;
+
+  const [year, month, day] = matchDate.split('-').map(Number);
+  const [hours, minutes, seconds] = normalizedTime.split(':').map(Number);
+  if ([year, month, day, hours, minutes, seconds].some(Number.isNaN)) return null;
+
+  const utcMillis = Date.UTC(year, month - 1, day, hours + 3, minutes, seconds);
+  return normalizeKickoffAt(new Date(utcMillis));
+}
+
+function getMatchKickoff(match) {
+  const normalizedKickoffAt = normalizeKickoffAt(match?.kickoff_at);
+  if (normalizedKickoffAt) {
+    return new Date(normalizedKickoffAt);
+  }
+
+  if (!match?.match_date || !match?.match_time) return null;
+  const rebuiltKickoffAt = buildKickoffAtFromLocal(match.match_date, match.match_time);
+  return rebuiltKickoffAt ? new Date(rebuiltKickoffAt) : null;
+}
+
+function getEffectiveMatchStatus(match, now = new Date()) {
+  if (!match) return 'upcoming';
+  if (match.status === 'finished') return 'finished';
+  if (match.status === 'live') return 'live';
+
+  const kickoff = getMatchKickoff(match);
+  if (kickoff && now.getTime() >= kickoff.getTime()) {
+    return 'live';
+  }
+
+  return 'upcoming';
+}
+
+function serializeMatch(match, now = new Date()) {
+  const kickoff = getMatchKickoff(match);
+  const status = getEffectiveMatchStatus(match, now);
+
+  return {
+    ...match,
+    status,
+    can_predict: status === 'upcoming',
+    kickoff_at: kickoff ? kickoff.toISOString() : normalizeKickoffAt(match?.kickoff_at),
+  };
+}
+
+module.exports = {
+  db,
+  buildKickoffAtFromLocal,
+  calculatePoints,
+  getUtcMinus3DateParts,
+  getMatchKickoff,
+  getEffectiveMatchStatus,
+  normalizeKickoffAt,
+  normalizeMatchTime,
+  serializeMatch,
+};

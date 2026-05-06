@@ -99,7 +99,7 @@
     <div id="page-admin" class="page hidden">
       <div class="page-header">
         <h2>Panel de Administrador</h2>
-        <p class="page-desc">Cargá los resultados de los partidos para actualizar los puntos automáticamente.</p>
+        <p class="page-desc">Cargá resultados y horarios de inicio. Cuando un partido tiene fecha y hora, la penca deja de aceptar pronósticos al momento del arranque.</p>
       </div>
       <div class="admin-tabs">
         <button class="admin-tab active" onclick="showAdminTab('results')">Cargar Resultados</button>
@@ -124,6 +124,7 @@
             <div class="field"><label>Equipo Local</label><input type="text" id="am-home" placeholder="Argentina"></div>
             <div class="field"><label>Equipo Visitante</label><input type="text" id="am-away" placeholder="Brasil"></div>
             <div class="field"><label>Fecha</label><input type="date" id="am-date"></div>
+            <div class="field"><label>Hora de inicio</label><input type="time" id="am-time"></div>
             <div class="field"><label>Sede</label><input type="text" id="am-venue" placeholder="MetLife Stadium"></div>
             <div class="field"><label>Ciudad</label><input type="text" id="am-city" placeholder="Nueva York"></div>
           </div>

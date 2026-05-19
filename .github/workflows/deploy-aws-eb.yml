@@ -23,10 +23,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials (OIDC)
+        id: awscreds
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::703671898103:role/GitHubActions-Penca-Deploy
           aws-region: ${{ secrets.AWS_REGION }}
+          output-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -51,6 +53,9 @@ jobs:
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v22
         with:
+          aws_access_key: ${{ steps.awscreds.outputs.aws-access-key-id }}
+          aws_secret_key: ${{ steps.awscreds.outputs.aws-secret-access-key }}
+          aws_session_token: ${{ steps.awscreds.outputs.aws-session-token }}
           application_name: ${{ secrets.AWS_EB_APPLICATION }}
           environment_name: ${{ secrets.AWS_EB_ENVIRONMENT }}
           region: ${{ secrets.AWS_REGION }}

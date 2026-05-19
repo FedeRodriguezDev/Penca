@@ -1,0 +1,60 @@
+name: Deploy to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-aws-eb-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::703671898103:role/GitHubActions-Penca-Deploy
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build version label
+        id: vars
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Create deployment package
+        run: |
+          zip -r deploy.zip . \
+            -x "*.git*" \
+            -x "node_modules/*" \
+            -x ".github/*"
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          application_name: ${{ secrets.AWS_EB_APPLICATION }}
+          environment_name: ${{ secrets.AWS_EB_ENVIRONMENT }}
+          region: ${{ secrets.AWS_REGION }}
+          existing_bucket_name: ${{ secrets.AWS_EB_S3_BUCKET }}
+          version_label: gha-${{ github.run_number }}-${{ steps.vars.outputs.short_sha }}
+          deployment_package: deploy.zip
+          wait_for_deployment: true

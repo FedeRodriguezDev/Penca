@@ -3,3 +3,4 @@ node_modules
 dist
 build
 data/penca.db-wal
+aws config

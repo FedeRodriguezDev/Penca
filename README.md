@@ -53,6 +53,23 @@ pm2 start server.js --name penca
 pm2 save
 ```
 
+### Opción D: AWS Elastic Beanstalk + GitHub Actions
+
+Este repo ya incluye el workflow [deploy-aws-eb.yml](.github/workflows/deploy-aws-eb.yml), que despliega automáticamente en cada push a `main` y también permite ejecución manual desde la pestaña **Actions**.
+
+1. Crear en AWS un entorno de **Elastic Beanstalk** para Node.js (app + environment)
+2. Crear/usar un bucket S3 para versiones de Elastic Beanstalk
+3. Configurar OIDC entre GitHub Actions e IAM (sin access keys estáticas)
+4. En GitHub, ir a **Settings → Secrets and variables → Actions** y cargar estos secrets:
+    - `AWS_REGION` (ejemplo: `us-east-1`)
+    - `AWS_EB_APPLICATION` (nombre de la app en Elastic Beanstalk)
+    - `AWS_EB_ENVIRONMENT` (nombre del environment)
+    - `AWS_EB_S3_BUCKET` (bucket usado por Elastic Beanstalk)
+5. En Elastic Beanstalk, configurar las variables de entorno de la app (mínimo `JWT_SECRET`)
+6. Hacer push a `main` para disparar el deploy
+
+> Recomendación: usar OIDC (rol asumido por GitHub) evita manejar secretos de largo plazo y es más seguro para CI/CD.
+
 ---
 
 ## 📊 Sistema de puntos

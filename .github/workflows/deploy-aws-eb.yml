@@ -41,7 +41,11 @@ jobs:
 
       - name: Build version label
         id: vars
-        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+          TIMESTAMP=$(date +%s)
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "version_label=gha-${TIMESTAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Create deployment package
         run: |
@@ -60,6 +64,7 @@ jobs:
           environment_name: ${{ secrets.AWS_EB_ENVIRONMENT }}
           region: ${{ secrets.AWS_REGION }}
           existing_bucket_name: ${{ secrets.AWS_EB_S3_BUCKET }}
-          version_label: gha-${{ github.run_number }}-${{ steps.vars.outputs.short_sha }}
+          version_label: ${{ steps.vars.outputs.version_label }}
           deployment_package: deploy.zip
+          use_existing_version_if_available: true
           wait_for_deployment: true

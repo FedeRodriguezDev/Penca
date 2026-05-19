@@ -6,88 +6,137 @@ const { getSyncStatus, syncWorldCupMatches } = require('../services/theSportsDbS
 const router = express.Router();
 
 // POST /api/admin/result - set match result and calculate points
-router.post('/result', adminMiddleware, (req, res) => {
-  const { match_id, home_score, away_score, status } = req.body;
-  if (match_id == null || home_score == null || away_score == null) {
-    return res.status(400).json({ error: 'match_id, home_score y away_score requeridos' });
-  }
+router.post('/result', adminMiddleware, async (req, res) => {
+  try {
+    const { match_id, home_score, away_score, status } = req.body;
+    if (match_id == null || home_score == null || away_score == null) {
+      return res.status(400).json({ error: 'match_id, home_score y away_score requeridos' });
+    }
 
-  const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(match_id);
-  if (!match) return res.status(404).json({ error: 'Partido no encontrado' });
+    const match = await db.prepare('SELECT * FROM matches WHERE id = $1').get(match_id);
+    if (!match) return res.status(404).json({ error: 'Partido no encontrado' });
 
-  db.prepare(`
-    UPDATE matches SET home_score = ?, away_score = ?, status = ? WHERE id = ?
-  `).run(home_score, away_score, status || 'finished', match_id);
+    await db.prepare(`
+      UPDATE matches SET home_score = $1, away_score = $2, status = $3 WHERE id = $4
+    `).run(home_score, away_score, status || 'finished', match_id);
 
-  // Recalculate points for all predictions on this match
-  if (status === 'finished' || !status) {
-    const predictions = db.prepare('SELECT * FROM predictions WHERE match_id = ?').all(match_id);
-    const updatePts = db.prepare('UPDATE predictions SET points = ? WHERE id = ?');
-    const updateAll = db.transaction(() => {
+    // Recalculate points for all predictions on this match
+    if (status === 'finished' || !status) {
+      const predictions = await db.prepare('SELECT * FROM predictions WHERE match_id = $1').all(match_id);
       for (const pred of predictions) {
         const pts = calculatePoints(pred.home_score, pred.away_score, home_score, away_score);
-        updatePts.run(pts, pred.id);
+        await db.prepare('UPDATE predictions SET points = $1 WHERE id = $2').run(pts, pred.id);
       }
-    });
-    updateAll();
-  }
+    }
 
-  res.json({ message: 'Resultado guardado y puntos actualizados ✅' });
+    res.json({ message: 'Resultado guardado y puntos actualizados ✅' });
+  } catch (err) {
+    console.error('Set result error:', err);
+    res.status(500).json({ error: 'Error al guardar resultado' });
+  }
 });
 
 // POST /api/admin/match - add a new match (knockout stages)
-router.post('/match', adminMiddleware, (req, res) => {
-  const { match_number, stage, group_name, home_team, away_team, match_date, match_time, venue, city } = req.body;
-  if (!match_number || !stage || !home_team || !away_team) {
-    return res.status(400).json({ error: 'match_number, stage, home_team y away_team requeridos' });
-  }
-  const kickoffAt = buildKickoffAtFromLocal(match_date || null, match_time || null);
+router.post('/match', adminMiddleware, async (req, res) => {
   try {
-    db.prepare(`
+    const { match_number, stage, group_name, home_team, away_team, match_date, match_time, venue, city } = req.body;
+    if (!match_number || !stage || !home_team || !away_team) {
+      return res.status(400).json({ error: 'match_number, stage, home_team y away_team requeridos' });
+    }
+    const kickoffAt = buildKickoffAtFromLocal(match_date || null, match_time || null);
+    
+    await db.prepare(`
       INSERT INTO matches (match_number, stage, group_name, home_team, away_team, match_date, match_time, kickoff_at, venue, city)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `).run(match_number, stage, group_name || null, home_team, away_team, match_date || null, match_time || null, kickoffAt, venue || '', city || '');
+    
     res.json({ message: 'Partido agregado ✅' });
   } catch (err) {
-    if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Número de partido ya existe' });
+    console.error('Add match error:', err);
+    if (err.message?.includes('UNIQUE')) {
+      return res.status(400).json({ error: 'Número de partido ya existe' });
+    }
     res.status(500).json({ error: 'Error al agregar partido' });
   }
 });
 
 // PUT /api/admin/match/:id - update match info
-router.put('/match/:id', adminMiddleware, (req, res) => {
-  const { home_team, away_team, match_date, match_time, venue, city, status } = req.body;
-  const kickoffAt = buildKickoffAtFromLocal(match_date || null, match_time || null);
-  db.prepare(`
-    UPDATE matches SET home_team = COALESCE(?, home_team), away_team = COALESCE(?, away_team),
-    match_date = COALESCE(?, match_date), match_time = COALESCE(?, match_time), kickoff_at = COALESCE(?, kickoff_at), venue = COALESCE(?, venue), city = COALESCE(?, city),
-    status = COALESCE(?, status) WHERE id = ?
-  `).run(home_team, away_team, match_date, match_time, kickoffAt, venue, city, status, req.params.id);
-  res.json({ message: 'Partido actualizado ✅' });
+router.put('/match/:id', adminMiddleware, async (req, res) => {
+  try {
+    const { home_team, away_team, match_date, match_time, venue, city, status } = req.body;
+    const kickoffAt = buildKickoffAtFromLocal(match_date || null, match_time || null);
+    
+    // Build UPDATE clause dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+    
+    if (home_team) { updates.push(`home_team = $${paramCount}`); values.push(home_team); paramCount++; }
+    if (away_team) { updates.push(`away_team = $${paramCount}`); values.push(away_team); paramCount++; }
+    if (match_date) { updates.push(`match_date = $${paramCount}`); values.push(match_date); paramCount++; }
+    if (match_time) { updates.push(`match_time = $${paramCount}`); values.push(match_time); paramCount++; }
+    if (kickoffAt) { updates.push(`kickoff_at = $${paramCount}`); values.push(kickoffAt); paramCount++; }
+    if (venue) { updates.push(`venue = $${paramCount}`); values.push(venue); paramCount++; }
+    if (city) { updates.push(`city = $${paramCount}`); values.push(city); paramCount++; }
+    if (status) { updates.push(`status = $${paramCount}`); values.push(status); paramCount++; }
+    
+    values.push(req.params.id);
+    
+    if (updates.length > 0) {
+      const sql = `UPDATE matches SET ${updates.join(', ')} WHERE id = $${paramCount}`;
+      await db.prepare(sql).run(...values);
+    }
+    
+    res.json({ message: 'Partido actualizado ✅' });
+  } catch (err) {
+    console.error('Update match error:', err);
+    res.status(500).json({ error: 'Error al actualizar partido' });
+  }
 });
 
 // GET /api/admin/users - list all users
-router.get('/users', adminMiddleware, (req, res) => {
-  const users = db.prepare('SELECT id, username, email, is_admin, created_at FROM users ORDER BY created_at').all();
-  res.json(users);
+router.get('/users', adminMiddleware, async (req, res) => {
+  try {
+    const users = await db.prepare('SELECT id, username, email, is_admin, created_at FROM users ORDER BY created_at').all();
+    res.json(users);
+  } catch (err) {
+    console.error('Get users error:', err);
+    res.status(500).json({ error: 'Error al obtener usuarios' });
+  }
 });
 
 // PUT /api/admin/users/:id/admin - toggle admin
-router.put('/users/:id/admin', adminMiddleware, (req, res) => {
-  const { is_admin } = req.body;
-  db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(is_admin ? 1 : 0, req.params.id);
-  res.json({ message: 'Usuario actualizado' });
+router.put('/users/:id/admin', adminMiddleware, async (req, res) => {
+  try {
+    const { is_admin } = req.body;
+    await db.prepare('UPDATE users SET is_admin = $1 WHERE id = $2').run(is_admin ? 1 : 0, req.params.id);
+    res.json({ message: 'Usuario actualizado' });
+  } catch (err) {
+    console.error('Toggle admin error:', err);
+    res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
 });
 
 // GET /api/admin/matches - all matches for admin
-router.get('/matches', adminMiddleware, (req, res) => {
-  const matches = db.prepare('SELECT * FROM matches ORDER BY match_number').all().map((match) => serializeMatch(match));
-  res.json(matches);
+router.get('/matches', adminMiddleware, async (req, res) => {
+  try {
+    const matches = await db.prepare('SELECT * FROM matches ORDER BY match_number').all();
+    const serialized = matches.map((match) => serializeMatch(match));
+    res.json(serialized);
+  } catch (err) {
+    console.error('Get admin matches error:', err);
+    res.status(500).json({ error: 'Error al obtener partidos' });
+  }
 });
 
 // GET /api/admin/sync/thesportsdb - current sync status
-router.get('/sync/thesportsdb', adminMiddleware, (req, res) => {
-  res.json(getSyncStatus());
+router.get('/sync/thesportsdb', adminMiddleware, async (req, res) => {
+  try {
+    res.json(getSyncStatus());
+  } catch (err) {
+    console.error('Get sync status error:', err);
+    res.status(500).json({ error: 'Error al obtener estado de sincronización' });
+  }
 });
 
 // POST /api/admin/sync/thesportsdb - force a sync now
@@ -96,8 +145,10 @@ router.post('/sync/thesportsdb', adminMiddleware, async (req, res) => {
     const result = await syncWorldCupMatches({ force: true, source: 'admin-route' });
     res.json(result);
   } catch (error) {
+    console.error('Sync error:', error);
     res.status(502).json({ error: `No se pudo sincronizar con TheSportsDB: ${error.message}` });
   }
 });
 
 module.exports = router;
+

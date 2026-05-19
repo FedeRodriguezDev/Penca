@@ -91,58 +91,6 @@ const TEAM_NAME_TRANSLATIONS = {
   Venezuela: 'Venezuela',
 };
 
-const metadataSelect = db.prepare('SELECT value FROM app_metadata WHERE key = ?');
-const metadataUpsert = db.prepare(`
-  INSERT INTO app_metadata (key, value, updated_at)
-  VALUES (?, ?, CURRENT_TIMESTAMP)
-  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-`);
-
-const selectAllMatches = db.prepare(`
-  SELECT id, match_number, external_event_id, home_score, away_score, status
-  FROM matches
-  ORDER BY match_number ASC
-`);
-
-const insertMatch = db.prepare(`
-  INSERT INTO matches (
-    match_number, stage, group_name, home_team, away_team, home_flag, away_flag,
-    match_date, match_time, kickoff_at, venue, city, home_score, away_score, external_event_id, status
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`);
-
-const updateMatch = db.prepare(`
-  UPDATE matches
-  SET match_number = ?,
-      stage = ?,
-      group_name = ?,
-      home_team = ?,
-      away_team = ?,
-      home_flag = ?,
-      away_flag = ?,
-      match_date = ?,
-      match_time = ?,
-      kickoff_at = ?,
-      venue = ?,
-      city = ?,
-      home_score = ?,
-      away_score = ?,
-      external_event_id = ?,
-      status = ?
-  WHERE id = ?
-`);
-
-const selectPredictionsByMatch = db.prepare('SELECT id, home_score, away_score FROM predictions WHERE match_id = ?');
-const updatePredictionPoints = db.prepare('UPDATE predictions SET points = ? WHERE id = ?');
-const selectMatchNeedingResultRefresh = db.prepare(`
-  SELECT id
-  FROM matches
-  WHERE kickoff_at IS NOT NULL
-    AND COALESCE(status, 'upcoming') != 'finished'
-    AND kickoff_at BETWEEN ? AND ?
-  LIMIT 1
-`);
-
 function shouldLog(level = 'basic') {
   if (THESPORTSDB_LOG_LEVEL === 'silent' || THESPORTSDB_LOG_LEVEL === 'off') return false;
   if (THESPORTSDB_LOG_LEVEL === 'debug') return true;
@@ -163,12 +111,17 @@ function redactApiKey(url) {
   return String(url).replace(`/${THESPORTSDB_API_KEY}/`, '/<api-key>/');
 }
 
-function getMetadata(key) {
-  return metadataSelect.get(key)?.value ?? null;
+async function getMetadata(key) {
+  const row = await db.prepare('SELECT value FROM app_metadata WHERE key = $1').get(key);
+  return row?.value ?? null;
 }
 
-function setMetadata(key, value) {
-  metadataUpsert.run(key, value == null ? null : String(value));
+async function setMetadata(key, value) {
+  await db.prepare(`
+    INSERT INTO app_metadata (key, value, updated_at)
+    VALUES ($1, $2, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `).run(key, value == null ? null : String(value));
 }
 
 function mapApiStatus(status) {
@@ -256,22 +209,22 @@ function normalizeRemoteMatch(event, index) {
   };
 }
 
-function recalculatePointsForMatch(matchId, homeScore, awayScore) {
+async function recalculatePointsForMatch(matchId, homeScore, awayScore) {
   if (homeScore == null || awayScore == null) return 0;
 
-  const predictions = selectPredictionsByMatch.all(matchId);
+  const predictions = await db.prepare('SELECT id, home_score, away_score FROM predictions WHERE match_id = $1').all(matchId);
   for (const prediction of predictions) {
     const points = calculatePoints(prediction.home_score, prediction.away_score, homeScore, awayScore);
-    updatePredictionPoints.run(points, prediction.id);
+    await db.prepare('UPDATE predictions SET points = $1 WHERE id = $2').run(points, prediction.id);
   }
 
   return predictions.length;
 }
 
-function clearPointsForMatch(matchId) {
-  const predictions = selectPredictionsByMatch.all(matchId);
+async function clearPointsForMatch(matchId) {
+  const predictions = await db.prepare('SELECT id, home_score, away_score FROM predictions WHERE match_id = $1').all(matchId);
   for (const prediction of predictions) {
-    updatePredictionPoints.run(null, prediction.id);
+    await db.prepare('UPDATE predictions SET points = $1 WHERE id = $2').run(null, prediction.id);
   }
 
   return predictions.length;
@@ -337,8 +290,8 @@ async function fetchWorldCupEvents() {
     .sort(compareEvents);
 }
 
-function isDailySyncDue(now = new Date()) {
-  const lastSyncAt = getMetadata('thesportsdb_last_fixture_sync_at') || getMetadata('thesportsdb_last_sync_at');
+async function isDailySyncDue(now = new Date()) {
+  const lastSyncAt = (await getMetadata('thesportsdb_last_fixture_sync_at')) || (await getMetadata('thesportsdb_last_sync_at'));
   if (!lastSyncAt) return true;
 
   const lastRun = new Date(lastSyncAt);
@@ -346,8 +299,8 @@ function isDailySyncDue(now = new Date()) {
   return now.getTime() - lastRun.getTime() >= DAILY_SYNC_MS;
 }
 
-function isIntervalDue(metadataKey, intervalMs, now = new Date()) {
-  const lastRunAt = getMetadata(metadataKey);
+async function isIntervalDue(metadataKey, intervalMs, now = new Date()) {
+  const lastRunAt = await getMetadata(metadataKey);
   if (!lastRunAt) return true;
 
   const lastRun = new Date(lastRunAt);
@@ -355,25 +308,33 @@ function isIntervalDue(metadataKey, intervalMs, now = new Date()) {
   return now.getTime() - lastRun.getTime() >= intervalMs;
 }
 
-function hasActiveResultWindow(now = new Date()) {
+async function hasActiveResultWindow(now = new Date()) {
   const lowerBound = new Date(now.getTime() - RESULT_REFRESH_LOOKBACK_MS).toISOString();
   const upperBound = new Date(now.getTime() + RESULT_REFRESH_LOOKAHEAD_MS).toISOString();
-  return Boolean(selectMatchNeedingResultRefresh.get(lowerBound, upperBound));
+  const row = await db.prepare(`
+    SELECT id
+    FROM matches
+    WHERE kickoff_at IS NOT NULL
+      AND COALESCE(status, 'upcoming') != 'finished'
+      AND kickoff_at BETWEEN $1 AND $2
+    LIMIT 1
+  `).get(lowerBound, upperBound);
+  return Boolean(row);
 }
 
-function isResultRefreshDue(now = new Date()) {
-  return hasActiveResultWindow(now) && isIntervalDue('thesportsdb_last_result_refresh_at', RESULT_REFRESH_MS, now);
+async function isResultRefreshDue(now = new Date()) {
+  return (await hasActiveResultWindow(now)) && (await isIntervalDue('thesportsdb_last_result_refresh_at', RESULT_REFRESH_MS, now));
 }
 
-function getScheduledSyncReason(now = new Date()) {
-  if (isDailySyncDue(now)) return 'daily-fixtures';
-  if (isResultRefreshDue(now)) return 'result-refresh';
+async function getScheduledSyncReason(now = new Date()) {
+  if (await isDailySyncDue(now)) return 'daily-fixtures';
+  if (await isResultRefreshDue(now)) return 'result-refresh';
   return null;
 }
 
 async function syncWorldCupMatches({ force = false, source = 'manual', reason = null } = {}) {
   const startedAt = new Date();
-  const syncReason = force ? 'forced' : (reason || getScheduledSyncReason(startedAt));
+  const syncReason = force ? 'forced' : (reason || (await getScheduledSyncReason(startedAt)));
   logTheSportsDb('Iniciando sync', {
     source,
     force,
@@ -384,18 +345,18 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
   if (!force && !syncReason) {
     logTheSportsDb('Sync omitida porque no hay ventana activa para actualizar', {
       source,
-      lastSyncAt: getMetadata('thesportsdb_last_sync_at'),
-      activeResultWindow: hasActiveResultWindow(startedAt),
+      lastSyncAt: await getMetadata('thesportsdb_last_sync_at'),
+      activeResultWindow: await hasActiveResultWindow(startedAt),
     });
     return {
       skipped: true,
       reason: 'not-due',
-      lastSyncAt: getMetadata('thesportsdb_last_sync_at'),
+      lastSyncAt: await getMetadata('thesportsdb_last_sync_at'),
     };
   }
 
-  setMetadata('thesportsdb_last_attempt_at', startedAt.toISOString());
-  setMetadata('thesportsdb_last_source', source);
+  await setMetadata('thesportsdb_last_attempt_at', startedAt.toISOString());
+  await setMetadata('thesportsdb_last_source', source);
 
   try {
     const remoteEvents = await fetchWorldCupEvents();
@@ -410,50 +371,42 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
         : null,
     }, 'debug');
 
-    const summary = db.transaction(() => {
-      const existingMatches = selectAllMatches.all();
-      const byExternalId = new Map(existingMatches.filter((match) => match.external_event_id).map((match) => [String(match.external_event_id), match]));
-      const byMatchNumber = new Map(existingMatches.map((match) => [match.match_number, match]));
+    const existingMatches = await db.prepare(`
+      SELECT id, match_number, external_event_id, home_score, away_score, status
+      FROM matches
+      ORDER BY match_number ASC
+    `).all();
 
-      let inserted = 0;
-      let updated = 0;
-      let recalculatedPredictions = 0;
+    const byExternalId = new Map(existingMatches.filter((match) => match.external_event_id).map((match) => [String(match.external_event_id), match]));
+    const byMatchNumber = new Map(existingMatches.map((match) => [match.match_number, match]));
 
-      for (const remoteMatch of normalizedMatches) {
-        const existingMatch = byExternalId.get(remoteMatch.external_event_id) || byMatchNumber.get(remoteMatch.match_number);
-        if (existingMatch) {
-          updateMatch.run(
-            remoteMatch.match_number,
-            remoteMatch.stage,
-            remoteMatch.group_name,
-            remoteMatch.home_team,
-            remoteMatch.away_team,
-            remoteMatch.home_flag,
-            remoteMatch.away_flag,
-            remoteMatch.match_date,
-            remoteMatch.match_time,
-            remoteMatch.kickoff_at,
-            remoteMatch.venue,
-            remoteMatch.city,
-            remoteMatch.home_score,
-            remoteMatch.away_score,
-            remoteMatch.external_event_id,
-            remoteMatch.status,
-            existingMatch.id,
-          );
-          updated += 1;
-          byExternalId.set(remoteMatch.external_event_id, { ...existingMatch, external_event_id: remoteMatch.external_event_id });
-          byMatchNumber.set(remoteMatch.match_number, { ...existingMatch, match_number: remoteMatch.match_number });
+    let inserted = 0;
+    let updated = 0;
+    let recalculatedPredictions = 0;
 
-          if (remoteMatch.status === 'finished') {
-            recalculatedPredictions += recalculatePointsForMatch(existingMatch.id, remoteMatch.home_score, remoteMatch.away_score);
-          } else {
-            clearPointsForMatch(existingMatch.id);
-          }
-          continue;
-        }
-
-        const insertedInfo = insertMatch.run(
+    for (const remoteMatch of normalizedMatches) {
+      const existingMatch = byExternalId.get(remoteMatch.external_event_id) || byMatchNumber.get(remoteMatch.match_number);
+      if (existingMatch) {
+        await db.prepare(`
+          UPDATE matches
+          SET match_number = $1,
+              stage = $2,
+              group_name = $3,
+              home_team = $4,
+              away_team = $5,
+              home_flag = $6,
+              away_flag = $7,
+              match_date = $8,
+              match_time = $9,
+              kickoff_at = $10,
+              venue = $11,
+              city = $12,
+              home_score = $13,
+              away_score = $14,
+              external_event_id = $15,
+              status = $16
+          WHERE id = $17
+        `).run(
           remoteMatch.match_number,
           remoteMatch.stage,
           remoteMatch.group_name,
@@ -470,35 +423,72 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
           remoteMatch.away_score,
           remoteMatch.external_event_id,
           remoteMatch.status,
+          existingMatch.id,
         );
-        inserted += 1;
+        updated += 1;
+        byExternalId.set(remoteMatch.external_event_id, { ...existingMatch, external_event_id: remoteMatch.external_event_id });
+        byMatchNumber.set(remoteMatch.match_number, { ...existingMatch, match_number: remoteMatch.match_number });
 
         if (remoteMatch.status === 'finished') {
-          recalculatedPredictions += recalculatePointsForMatch(insertedInfo.lastInsertRowid, remoteMatch.home_score, remoteMatch.away_score);
+          recalculatedPredictions += await recalculatePointsForMatch(existingMatch.id, remoteMatch.home_score, remoteMatch.away_score);
         } else {
-          clearPointsForMatch(insertedInfo.lastInsertRowid);
+          await clearPointsForMatch(existingMatch.id);
         }
+        continue;
       }
 
-      return {
-        fetched: normalizedMatches.length,
-        inserted,
-        updated,
-        recalculatedPredictions,
-      };
-    })();
+      const insertedInfo = await db.prepare(`
+        INSERT INTO matches (
+          match_number, stage, group_name, home_team, away_team, home_flag, away_flag,
+          match_date, match_time, kickoff_at, venue, city, home_score, away_score, external_event_id, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        RETURNING id
+      `).get(
+        remoteMatch.match_number,
+        remoteMatch.stage,
+        remoteMatch.group_name,
+        remoteMatch.home_team,
+        remoteMatch.away_team,
+        remoteMatch.home_flag,
+        remoteMatch.away_flag,
+        remoteMatch.match_date,
+        remoteMatch.match_time,
+        remoteMatch.kickoff_at,
+        remoteMatch.venue,
+        remoteMatch.city,
+        remoteMatch.home_score,
+        remoteMatch.away_score,
+        remoteMatch.external_event_id,
+        remoteMatch.status,
+      );
+      inserted += 1;
+      const insertedId = insertedInfo.id;
+
+      if (remoteMatch.status === 'finished') {
+        recalculatedPredictions += await recalculatePointsForMatch(insertedId, remoteMatch.home_score, remoteMatch.away_score);
+      } else {
+        await clearPointsForMatch(insertedId);
+      }
+    }
+
+    const summary = {
+      fetched: normalizedMatches.length,
+      inserted,
+      updated,
+      recalculatedPredictions,
+    };
 
     const finishedAt = new Date();
-    setMetadata('thesportsdb_last_sync_at', finishedAt.toISOString());
+    await setMetadata('thesportsdb_last_sync_at', finishedAt.toISOString());
     if (force || syncReason !== 'result-refresh') {
-      setMetadata('thesportsdb_last_fixture_sync_at', finishedAt.toISOString());
+      await setMetadata('thesportsdb_last_fixture_sync_at', finishedAt.toISOString());
     }
-    if (force || syncReason === 'result-refresh' || hasActiveResultWindow(finishedAt)) {
-      setMetadata('thesportsdb_last_result_refresh_at', finishedAt.toISOString());
+    if (force || syncReason === 'result-refresh' || (await hasActiveResultWindow(finishedAt))) {
+      await setMetadata('thesportsdb_last_result_refresh_at', finishedAt.toISOString());
     }
-    setMetadata('thesportsdb_last_status', 'success');
-    setMetadata('thesportsdb_last_error', '');
-    setMetadata('thesportsdb_last_summary', JSON.stringify(summary));
+    await setMetadata('thesportsdb_last_status', 'success');
+    await setMetadata('thesportsdb_last_error', '');
+    await setMetadata('thesportsdb_last_summary', JSON.stringify(summary));
 
     logTheSportsDb('Sync completada', {
       source,
@@ -515,8 +505,8 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
       ...summary,
     };
   } catch (error) {
-    setMetadata('thesportsdb_last_status', 'error');
-    setMetadata('thesportsdb_last_error', error.message);
+    await setMetadata('thesportsdb_last_status', 'error');
+    await setMetadata('thesportsdb_last_error', error.message);
     logTheSportsDb('Sync falló', {
       source,
       message: error.message,
@@ -525,20 +515,20 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
   }
 }
 
-function getSyncStatus() {
+async function getSyncStatus() {
   return {
-    lastAttemptAt: getMetadata('thesportsdb_last_attempt_at'),
-    lastSyncAt: getMetadata('thesportsdb_last_sync_at'),
-    lastFixtureSyncAt: getMetadata('thesportsdb_last_fixture_sync_at') || getMetadata('thesportsdb_last_sync_at'),
-    lastResultRefreshAt: getMetadata('thesportsdb_last_result_refresh_at'),
-    lastStatus: getMetadata('thesportsdb_last_status'),
-    lastError: getMetadata('thesportsdb_last_error'),
-    lastSource: getMetadata('thesportsdb_last_source'),
-    lastSummary: getMetadata('thesportsdb_last_summary'),
-    activeResultWindow: hasActiveResultWindow(),
-    dailyDueNow: isDailySyncDue(),
-    resultRefreshDueNow: isResultRefreshDue(),
-    dueNow: Boolean(getScheduledSyncReason()),
+    lastAttemptAt: await getMetadata('thesportsdb_last_attempt_at'),
+    lastSyncAt: await getMetadata('thesportsdb_last_sync_at'),
+    lastFixtureSyncAt: (await getMetadata('thesportsdb_last_fixture_sync_at')) || (await getMetadata('thesportsdb_last_sync_at')),
+    lastResultRefreshAt: await getMetadata('thesportsdb_last_result_refresh_at'),
+    lastStatus: await getMetadata('thesportsdb_last_status'),
+    lastError: await getMetadata('thesportsdb_last_error'),
+    lastSource: await getMetadata('thesportsdb_last_source'),
+    lastSummary: await getMetadata('thesportsdb_last_summary'),
+    activeResultWindow: await hasActiveResultWindow(),
+    dailyDueNow: await isDailySyncDue(),
+    resultRefreshDueNow: await isResultRefreshDue(),
+    dueNow: Boolean(await getScheduledSyncReason()),
   };
 }
 

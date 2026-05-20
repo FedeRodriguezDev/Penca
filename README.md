@@ -69,6 +69,8 @@ Este repo ya incluye el workflow [deploy-aws-eb.yml](.github/workflows/deploy-aw
 6. Hacer push a `main` para disparar el deploy
 
 > Recomendación: usar OIDC (rol asumido por GitHub) evita manejar secretos de largo plazo y es más seguro para CI/CD.
+>
+> Si el deploy falla con `InsufficientPrivilegesException` intentando crear `elasticbeanstalk-<region>-<account-id>`, el rol OIDC también necesita `elasticbeanstalk:CreateStorageLocation` y permiso `s3:CreateBucket` sobre ese bucket interno de Elastic Beanstalk, o bien ese bucket debe existir previamente.
 
 ---
 

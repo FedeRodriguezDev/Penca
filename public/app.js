@@ -551,22 +551,84 @@ async function loadUsers() {
     const users = await apiFetch('/admin/users');
     container.innerHTML = `
       <div class="users-table">
-        ${users.map(u => `
-          <div class="user-row">
-            <div><strong>${u.username}</strong></div>
-            <div style="color:var(--text-muted);font-size:0.82rem">${u.email}</div>
-            <div>${u.is_admin ? '<span class="user-admin-badge">ADMIN</span>' : ''}</div>
-            <div>
-              <button class="btn-small ${u.is_admin ? 'btn-logout' : 'btn-gold'}" onclick="toggleAdmin(${u.id}, ${u.is_admin})">
-                ${u.is_admin ? 'Quitar admin' : 'Hacer admin'}
-              </button>
+        <div class="users-header">
+          <div>Usuario</div>
+          <div>Email</div>
+          <div>Registrado</div>
+          <div>Rol</div>
+          <div>Acciones</div>
+        </div>
+        ${users.map(u => {
+          const createdAt = u.created_at ? new Date(u.created_at).toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-';
+          const isSelf = u.id === currentUser?.id;
+          return `
+          <div class="user-row" id="user-row-${u.id}">
+            <div class="user-display-${u.id}">
+              <strong>${u.username}</strong>
+              <span class="user-id-badge">#${u.id}</span>
+            </div>
+            <div class="user-display-${u.id}" style="color:var(--text-muted);font-size:0.85rem">${u.email}</div>
+            <div style="color:var(--text-muted);font-size:0.82rem">${createdAt}</div>
+            <div>${u.is_admin ? '<span class="user-admin-badge">ADMIN</span>' : '<span class="user-normal-badge">USER</span>'}</div>
+            <div class="user-actions">
+              <button class="btn-small btn-primary-sm" onclick="openEditUser(${u.id}, '${u.username.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')">✏️ Editar</button>
+              ${!isSelf ? `<button class="btn-small ${u.is_admin ? 'btn-logout' : 'btn-gold'}" onclick="toggleAdmin(${u.id}, ${u.is_admin ? 'true' : 'false'})">${u.is_admin ? '⬇️ Quitar admin' : '⬆️ Hacer admin'}</button>` : '<span class="user-self-label">Vos</span>'}
             </div>
           </div>
-        `).join('')}
+          <div class="user-edit-form hidden" id="user-edit-${u.id}">
+            <div class="user-edit-inner">
+              <div class="field">
+                <label>Nombre de usuario</label>
+                <input type="text" id="edit-username-${u.id}" value="${u.username}">
+              </div>
+              <div class="field">
+                <label>Email</label>
+                <input type="email" id="edit-email-${u.id}" value="${u.email}">
+              </div>
+              <div class="user-edit-actions">
+                <button class="btn-primary btn-sm" onclick="saveEditUser(${u.id})">Guardar</button>
+                <button class="btn-secondary btn-sm" onclick="closeEditUser(${u.id})">Cancelar</button>
+                <span class="user-edit-msg hidden" id="edit-msg-${u.id}"></span>
+              </div>
+            </div>
+          </div>
+        `}).join('')}
       </div>
     `;
   } catch (err) {
     container.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+}
+
+function openEditUser(userId, username, email) {
+  // Close any other open edit forms
+  document.querySelectorAll('.user-edit-form').forEach(f => f.classList.add('hidden'));
+  document.getElementById(`user-edit-${userId}`).classList.remove('hidden');
+  document.getElementById(`edit-username-${userId}`).focus();
+}
+
+function closeEditUser(userId) {
+  document.getElementById(`user-edit-${userId}`).classList.add('hidden');
+}
+
+async function saveEditUser(userId) {
+  const username = document.getElementById(`edit-username-${userId}`).value.trim();
+  const email = document.getElementById(`edit-email-${userId}`).value.trim();
+  const msgEl = document.getElementById(`edit-msg-${userId}`);
+  if (!username || !email) {
+    msgEl.textContent = 'Completá todos los campos';
+    msgEl.className = 'user-edit-msg error';
+    msgEl.classList.remove('hidden');
+    return;
+  }
+  try {
+    await apiFetch(`/admin/users/${userId}`, 'PUT', { username, email });
+    showToast('Usuario actualizado ✅');
+    loadUsers();
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.className = 'user-edit-msg error';
+    msgEl.classList.remove('hidden');
   }
 }
 

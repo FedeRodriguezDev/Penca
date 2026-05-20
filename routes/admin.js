@@ -105,6 +105,36 @@ router.get('/users', adminMiddleware, async (req, res) => {
   }
 });
 
+// PUT /api/admin/users/:id - update user data (username, email)
+router.put('/users/:id', adminMiddleware, async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    if (!username && !email) {
+      return res.status(400).json({ error: 'Se requiere al menos username o email' });
+    }
+
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (username) { updates.push(`username = $${paramCount}`); values.push(username.trim()); paramCount++; }
+    if (email) { updates.push(`email = $${paramCount}`); values.push(email.trim().toLowerCase()); paramCount++; }
+
+    values.push(req.params.id);
+    const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramCount}`;
+    const result = await db.prepare(sql).run(...values);
+
+    if (result.changes === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ message: 'Usuario actualizado ✅' });
+  } catch (err) {
+    console.error('Update user error:', err);
+    if (err.message?.includes('unique') || err.code === '23505') {
+      return res.status(400).json({ error: 'El username o email ya está en uso' });
+    }
+    res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
+});
+
 // PUT /api/admin/users/:id/admin - toggle admin
 router.put('/users/:id/admin', adminMiddleware, async (req, res) => {
   try {

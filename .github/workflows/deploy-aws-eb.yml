@@ -30,6 +30,9 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           output-credentials: true
 
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

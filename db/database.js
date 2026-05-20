@@ -1,14 +1,20 @@
 const { Pool } = require('pg');
 
 const UTC_MINUS_3_OFFSET_MS = -3 * 60 * 60 * 1000;
+const dbHost = process.env.DB_HOST || 'localhost';
+const dbSslSetting = (process.env.DB_SSL || '').trim().toLowerCase();
+const shouldUseSsl = dbSslSetting
+  ? ['1', 'true', 'require'].includes(dbSslSetting)
+  : !['localhost', '127.0.0.1'].includes(dbHost);
 
 // Configurar conexión a PostgreSQL desde variables de entorno
 const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
+  host: dbHost,
   port: process.env.DB_PORT || 5432,
   database: process.env.DB_NAME || 'penca_db',
   user: process.env.DB_USER || 'penca_admin',
   password: process.env.DB_PASSWORD || 'password',
+  ssl: shouldUseSsl ? { rejectUnauthorized: false } : false,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,

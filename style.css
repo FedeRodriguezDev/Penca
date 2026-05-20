@@ -1,20 +1,20 @@
 /* ===== RESET & BASE ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --green: #1a7a2e;
-  --green-dark: #105020;
-  --green-light: #2da84b;
-  --gold: #c9a227;
-  --gold-light: #f0c040;
-  --bg: #13253B;
-  --bg-card: #203E63;
-  --bg-card2: #1e3826;
-  --text: #e8f5e9;
-  --text-muted: #fff;
-  --border: #2a4a30;
-  --red: #e53935;
-  --blue: #1976d2;
-  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --green: #25418E;
+  --green-dark: #162755;
+  --green-light: #3E63C7;
+  --gold: #DAAA00;
+  --gold-light: #F4C542;
+  --bg: #0F172A;
+  --bg-card: #162755;
+  --bg-card2: #1E293B;
+  --text: #F8FAFC;
+  --text-muted: #94A3B8;
+  --border: #2D3F73;
+  --red: #EF4444;
+  --blue: #55B5E5;
+  --shadow: 0 4px 24px rgba(0,0,0,0.35);
   --radius: 12px;
 }
 html { font-size: 16px; }

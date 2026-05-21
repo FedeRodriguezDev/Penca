@@ -42,6 +42,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate EB environment config
+        env:
+          SMTP_PASS:      ${{ secrets.SMTP_PASS }}
+          APP_BASE_URL:   ${{ vars.APP_BASE_URL }}
+          SMTP_HOST:      ${{ vars.SMTP_HOST }}
+          SMTP_PORT:      ${{ vars.SMTP_PORT }}
+          SMTP_SECURE:    ${{ vars.SMTP_SECURE }}
+          SMTP_USER:      ${{ vars.SMTP_USER }}
+          EMAIL_FROM:     ${{ vars.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ vars.EMAIL_REPLY_TO }}
+        run: |
+          mkdir -p .ebextensions
+          jq -n \
+            --arg smtp_pass      "$SMTP_PASS"      \
+            --arg app_base_url   "$APP_BASE_URL"   \
+            --arg smtp_host      "$SMTP_HOST"      \
+            --arg smtp_port      "$SMTP_PORT"      \
+            --arg smtp_secure    "$SMTP_SECURE"    \
+            --arg smtp_user      "$SMTP_USER"      \
+            --arg email_from     "$EMAIL_FROM"     \
+            --arg email_reply_to "$EMAIL_REPLY_TO" \
+            '{
+              option_settings: [
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"SMTP_HOST",      value:$smtp_host},
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"SMTP_PORT",      value:$smtp_port},
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"SMTP_SECURE",    value:$smtp_secure},
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"SMTP_USER",      value:$smtp_user},
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"SMTP_PASS",      value:$smtp_pass},
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"EMAIL_FROM",     value:$email_from},
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"EMAIL_REPLY_TO", value:$email_reply_to},
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"APP_BASE_URL",   value:$app_base_url}
+              ]
+            }' > .ebextensions/01_environment.config
+
       - name: Build version label
         id: vars
         run: |

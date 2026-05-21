@@ -1,0 +1,19 @@
+{
+  "name": "Penca Infoclub",
+  "short_name": "Penca",
+  "description": "Pronósticos del Mundial 2026",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1e33",
+  "theme_color": "#0d1e33",
+  "lang": "es-UY",
+  "categories": ["sports", "games"],
+  "icons": [
+    {
+      "src": "/img/logo_infoclub.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -55,6 +55,7 @@ function showAuthTab(tab) {
   document.querySelectorAll('.auth-tab')[tab === 'login' ? 0 : 1].classList.add('active');
   document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
   document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+  if (tab !== 'register') document.getElementById('register-success').classList.add('hidden');
   hideAuthMsg();
 }
 
@@ -77,6 +78,14 @@ async function login() {
     currentUser = { username: data.username, is_admin: data.is_admin };
     showApp();
   } catch (err) {
+    if (err.code === 'EMAIL_NOT_VERIFIED') {
+      try {
+        await apiFetch('/auth/resend-verification', 'POST', { email });
+        return showAuthMsg('Tu cuenta aún no está verificada. Te reenviamos el correo de validación.', true);
+      } catch {
+        return showAuthMsg('Tu cuenta aún no está verificada. No pudimos reenviar el correo ahora.', true);
+      }
+    }
     showAuthMsg(err.message);
   }
 }
@@ -85,14 +94,16 @@ async function register() {
   const username = document.getElementById('reg-username').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   const password = document.getElementById('reg-password').value;
-  if (!username || !email || !password) return showAuthMsg('Completá todos los campos');
+  const passwordConfirm = document.getElementById('reg-password-confirm').value;
+  if (!username || !email || !password || !passwordConfirm) return showAuthMsg('Completá todos los campos');
+  if (password !== passwordConfirm) return showAuthMsg('Las contraseñas no coinciden');
   try {
-    const data = await apiFetch('/auth/register', 'POST', { username, email, password });
-    token = data.token;
-    localStorage.setItem('token', token);
-    currentUser = { username: data.username, is_admin: data.is_admin };
-    showAuthMsg(data.message || '¡Bienvenido!', false);
-    setTimeout(showApp, 900);
+    await apiFetch('/auth/register', 'POST', { username, email, password });
+    document.getElementById('register-form').classList.add('hidden');
+    document.getElementById('register-success-email').textContent = email;
+    document.getElementById('register-success').classList.remove('hidden');
+    document.getElementById('login-email').value = email;
+    document.getElementById('login-password').value = '';
   } catch (err) {
     showAuthMsg(err.message);
   }
@@ -664,7 +675,11 @@ async function apiFetch(endpoint, method = 'GET', body = null) {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`${API}${endpoint}`, opts);
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Error del servidor');
+  if (!res.ok) {
+    const error = new Error(data.error || 'Error del servidor');
+    error.code = data.code;
+    throw error;
+  }
   return data;
 }
 

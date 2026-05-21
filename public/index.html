@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>⚽ GOLES DE ESTACIÓN</title>
+  <title>⚽ PENCA INFOCLUB</title>
   <link rel="stylesheet" href="/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;1,300;1,400&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
 </head>
 <body>
@@ -14,8 +15,7 @@
   <div class="auth-bg"></div>
   <div class="auth-card">
     <div class="auth-logo">⚽</div>
-    <h1 class="auth-title">GOLES DE ESTACIÓN</h1>
-    <p class="auth-subtitle">La Penca de Ancap Colonia</p>
+    <h1 class="auth-title">PENCA INFOCLUB</h1>
 
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="showAuthTab('login')">Iniciar Sesión</button>
@@ -37,6 +37,9 @@
 
     <!-- REGISTER -->
     <div id="register-form" class="hidden">
+      <div class="register-notice">
+        📧 Te enviaremos un email de verificación. Asegurate de ingresar un correo al que tengas acceso.
+      </div>
       <div class="field">
         <label>Nombre de usuario</label>
         <input type="text" id="reg-username" placeholder="Tu apodo en la penca">
@@ -49,10 +52,29 @@
         <label>Contraseña</label>
         <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
       </div>
+      <div class="field">
+        <label>Confirmar contraseña</label>
+        <input type="password" id="reg-password-confirm" placeholder="Repetí tu contraseña" autocomplete="new-password">
+      </div>
       <button class="btn-primary btn-full" onclick="register()">Crear Cuenta</button>
     </div>
 
+    <!-- REGISTRO EXITOSO -->
+    <div id="register-success" class="hidden">
+      <div class="register-success-icon">📬</div>
+      <h3 class="register-success-title">¡Revisá tu correo!</h3>
+      <p class="register-success-body">
+        Te enviamos un email de verificación a <strong id="register-success-email"></strong>.
+        Hacé clic en el enlace del mail para activar tu cuenta y poder ingresar.
+      </p>
+      <p class="register-success-hint">Si no lo ves, revisá la carpeta de spam.</p>
+      <button class="btn-primary btn-full" onclick="showAuthTab('login')">Ir al inicio de sesión</button>
+    </div>
+
     <div id="auth-msg" class="auth-msg hidden"></div>
+  </div>
+  <div class="auth-corner-logo-wrap">
+    <img src="/img/logo_infoclub.png" alt="Infoclub" class="auth-corner-logo">
   </div>
 </div>
 
@@ -61,7 +83,7 @@
 
   <!-- NAVBAR -->
   <nav class="navbar">
-    <div class="nav-brand">⚽ <span>GOLES DE ESTACIÓN!</span></div>
+    <div class="nav-brand"> <img src="/img/logo_infoclub.png" alt="Infoclub" class="nav-logo-img"> <span>PENCA</span></div>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="showPage('matches')" data-page="matches">Partidos</button>
       <button class="nav-tab" onclick="showPage('leaderboard')" data-page="leaderboard">Tabla</button>

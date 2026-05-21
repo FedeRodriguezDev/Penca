@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const { startDailyWorldCupSync } = require('./services/theSportsDbSync');
+const { startEmailNotificationScheduler } = require('./services/emailNotifications');
 
 // Initialize database (runs on import)
 require('./db/database');
@@ -29,4 +30,5 @@ app.listen(PORT, () => {
   console.log(`⚽ Penca Mundial 2026 corriendo en http://localhost:${PORT}`);
   console.log(`📝 El primer usuario registrado será administrador`);
   startDailyWorldCupSync();
+  startEmailNotificationScheduler();
 });

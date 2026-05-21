@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: penca_db
+      POSTGRES_USER: penca_admin
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U penca_admin -d penca_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: penca_db
+      DB_USER: penca_admin
+      DB_PASSWORD: password
+      DB_SSL: "false"
+      JWT_SECRET: local_dev_secret_change_in_prod
+      PORT: 3000
+      APP_BASE_URL: http://localhost:3000
+      SMTP_HOST: infoclubcfe.com
+      SMTP_PORT: 587
+      SMTP_USER: jperrachon@infoclubcfe.com
+      SMTP_PASS: juan1234
+      EMAIL_FROM: jperrachon@infoclubcfe.com
+      EMAIL_REPLY_TO: jperrachon@infoclubcfe.com
+      SMTP_SECURE: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: node --watch server.js
+
+volumes:
+  pgdata:

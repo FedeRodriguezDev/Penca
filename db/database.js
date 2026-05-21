@@ -85,6 +85,12 @@ async function initializeDatabase() {
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
+        email_verified BOOLEAN DEFAULT FALSE,
+        email_verification_token TEXT,
+        email_verification_expires_at TEXT,
+        email_verification_sent_at TIMESTAMP,
+        notify_match_reminders BOOLEAN DEFAULT TRUE,
+        notify_prediction_results BOOLEAN DEFAULT TRUE,
         is_admin INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -127,9 +133,29 @@ async function initializeDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS email_notifications_log (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+        notification_type TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, match_id, notification_type)
+      );
+
       CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_external_event_id 
         ON matches(external_event_id) WHERE external_event_id IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_email_notifications_log_lookup
+        ON email_notifications_log(user_id, match_id, notification_type);
     `);
+
+    // Backward compatible migrations for pre-existing databases.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires_at TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_sent_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_match_reminders BOOLEAN DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_prediction_results BOOLEAN DEFAULT TRUE`);
 
     console.log('✅ Schema creado correctamente');
 

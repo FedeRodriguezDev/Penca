@@ -14,6 +14,24 @@ const UTC_MINUS_3_OFFSET_MS = -3 * 60 * 60 * 1000;
 const PAGE_AUTO_REFRESH_MS = 60 * 1000;
 
 // ──────────────────────────────────────────
+// SECURITY HELPERS
+// ──────────────────────────────────────────
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function safeSrc(url) {
+  if (!url || typeof url !== 'string') return '';
+  return /^https?:\/\//i.test(url) ? url : '';
+}
+
+// ──────────────────────────────────────────
 // BOOTSTRAP
 // ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -189,15 +207,18 @@ function renderGroupFilter(data) {
     activeGroup = 'all';
   }
   filter.innerHTML = `
-    <button class="filter-btn ${activeGroup === 'all' ? 'active' : ''}" onclick="filterGroup('all')">Todos</button>
-    ${groups.map(g => `<button class="filter-btn ${activeGroup === g ? 'active' : ''}" onclick="filterGroup('${g}')">${g}</button>`).join('')}
+    <button class="filter-btn ${activeGroup === 'all' ? 'active' : ''}" data-group="all">Todos</button>
+    ${groups.map(g => `<button class="filter-btn ${activeGroup === g ? 'active' : ''}" data-group="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}
   `;
+  filter.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => filterGroup(btn.dataset.group, e.currentTarget));
+  });
 }
 
-function filterGroup(group) {
+function filterGroup(group, targetBtn) {
   activeGroup = group;
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  if (targetBtn) targetBtn.classList.add('active');
   renderMatches(allMatches);
 }
 
@@ -218,17 +239,17 @@ function renderMatches(data) {
 }
 
 function renderTeamCrest(url, teamName) {
-  if (!url) {
-    return `<div class="team-crest team-crest-placeholder" aria-hidden="true">${teamName.slice(0, 1)}</div>`;
+  const safeUrl = safeSrc(url);
+  if (!safeUrl) {
+    return `<div class="team-crest team-crest-placeholder" aria-hidden="true">${escapeHtml(teamName.slice(0, 1))}</div>`;
   }
-
-  return `<img class="team-crest" src="${url}" alt="Escudo de ${teamName}" loading="lazy">`;
+  return `<img class="team-crest" src="${safeUrl}" alt="Escudo de ${escapeHtml(teamName)}" loading="lazy">`;
 }
 
 function renderMatchCard(m) {
   const canPredict = Boolean(m.can_predict);
-  const statusLabel = { upcoming: 'PRÓXIMO', live: 'EN VIVO', finished: 'FINALIZADO' }[m.status] || m.status;
-  const statusClass = `status-${m.status}`;
+  const statusLabel = { upcoming: 'PRÓXIMO', live: 'EN VIVO', finished: 'FINALIZADO' }[m.status] || 'DESCONOCIDO';
+  const statusClass = `status-${{ upcoming: 'upcoming', live: 'live', finished: 'finished' }[m.status] || 'unknown'}`;
   const dateStr = formatMatchDateTime(m);
 
   const hasPred = m.pred_home !== null && m.pred_home !== undefined;
@@ -280,7 +301,7 @@ function renderMatchCard(m) {
       <div class="match-header">
         <div class="match-meta">
           <strong>#${m.match_number}</strong> · ${dateStr}
-          <span class="venue"> · ${m.city || ''}</span>
+          <span class="venue"> · ${escapeHtml(m.city || '')}</span>
         </div>
         <span class="match-status ${statusClass}">${statusLabel}</span>
         ${pointsHtml}
@@ -293,13 +314,13 @@ function renderMatchCard(m) {
           <div class="match-body-row teams-row">
             <div class="team-column home">
               <div class="team home">
-                <span class="team-name">${m.home_team}</span>
+                <span class="team-name">${escapeHtml(m.home_team)}</span>
               </div>
             </div>
             <div class="match-center">${realScoreHtml}</div>
             <div class="team-column away">
               <div class="team away">
-                <span class="team-name">${m.away_team}</span>
+                <span class="team-name">${escapeHtml(m.away_team)}</span>
               </div>
             </div>
           </div>
@@ -436,7 +457,7 @@ function renderLeaderboard(leaders) {
       ${leaders.map((u, i) => `
         <div class="lb-row ${u.username === currentUser?.username ? 'my-row' : ''}">
           <div class="lb-rank ${rankCls(i)}">${rankIcon(i)}</div>
-          <div class="lb-username">${u.username}${u.username === currentUser?.username ? ' <span style="color:var(--text-muted);font-size:0.75rem">(vos)</span>' : ''}</div>
+          <div class="lb-username">${escapeHtml(u.username)}${u.username === currentUser?.username ? ' <span style="color:var(--text-muted);font-size:0.75rem">(vos)</span>' : ''}</div>
           <div class="lb-pts">${u.total_points}</div>
           <div class="lb-num lb-col-hide lb-exact">🏆 ${u.exact_scores}</div>
           <div class="lb-num lb-col-hide">✅ ${u.correct_results}</div>
@@ -465,8 +486,8 @@ async function loadAdminMatches() {
     container.innerHTML = matches.map(m => `
       <div class="admin-match-card">
         <div class="admin-match-info">
-          <div class="admin-match-teams">#${m.match_number} ${m.home_team} vs ${m.away_team}</div>
-          <div class="admin-match-meta">${m.stage}${m.group_name ? ` · Grupo ${m.group_name}` : ''} · ${formatMatchDateTime(m)} · <span style="color:${statusColors[m.status] || 'var(--green-light)'}">${m.status}</span></div>
+          <div class="admin-match-teams">#${m.match_number} ${escapeHtml(m.home_team)} vs ${escapeHtml(m.away_team)}</div>
+          <div class="admin-match-meta">${escapeHtml(m.stage)}${m.group_name ? ` · Grupo ${escapeHtml(m.group_name)}` : ''} · ${formatMatchDateTime(m)} · <span style="color:${statusColors[m.status] || 'var(--green-light)'}">${escapeHtml(m.status)}</span></div>
           ${m.status === 'finished' ? `<div class="result-saved">✅ Resultado: ${m.home_score} - ${m.away_score}</div>` : ''}
         </div>
         <div class="admin-result-form">
@@ -575,14 +596,14 @@ async function loadUsers() {
           return `
           <div class="user-row" id="user-row-${u.id}">
             <div class="user-display-${u.id}">
-              <strong>${u.username}</strong>
+              <strong>${escapeHtml(u.username)}</strong>
               <span class="user-id-badge">#${u.id}</span>
             </div>
-            <div class="user-display-${u.id}" style="color:var(--text-muted);font-size:0.85rem">${u.email}</div>
+            <div class="user-display-${u.id}" style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(u.email)}</div>
             <div style="color:var(--text-muted);font-size:0.82rem">${createdAt}</div>
             <div>${u.is_admin ? '<span class="user-admin-badge">ADMIN</span>' : '<span class="user-normal-badge">USER</span>'}</div>
             <div class="user-actions">
-              <button class="btn-small btn-primary-sm" onclick="openEditUser(${u.id}, '${u.username.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')">✏️ Editar</button>
+              <button class="btn-small btn-primary-sm user-edit-btn" data-userid="${u.id}">✏️ Editar</button>
               ${!isSelf ? `<button class="btn-small ${u.is_admin ? 'btn-logout' : 'btn-gold'}" onclick="toggleAdmin(${u.id}, ${u.is_admin ? 'true' : 'false'})">${u.is_admin ? '⬇️ Quitar admin' : '⬆️ Hacer admin'}</button>` : '<span class="user-self-label">Vos</span>'}
             </div>
           </div>
@@ -590,11 +611,11 @@ async function loadUsers() {
             <div class="user-edit-inner">
               <div class="field">
                 <label>Nombre de usuario</label>
-                <input type="text" id="edit-username-${u.id}" value="${u.username}">
+                <input type="text" id="edit-username-${u.id}" value="${escapeHtml(u.username)}">
               </div>
               <div class="field">
                 <label>Email</label>
-                <input type="email" id="edit-email-${u.id}" value="${u.email}">
+                <input type="email" id="edit-email-${u.id}" value="${escapeHtml(u.email)}">
               </div>
               <div class="user-edit-actions">
                 <button class="btn-primary btn-sm" onclick="saveEditUser(${u.id})">Guardar</button>
@@ -606,13 +627,16 @@ async function loadUsers() {
         `}).join('')}
       </div>
     `;
+    // Bind edit buttons via data attribute (avoids onclick with user data in HTML attrs)
+    container.querySelectorAll('.user-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => openEditUser(Number(btn.dataset.userid)));
+    });
   } catch (err) {
     container.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
   }
 }
 
-function openEditUser(userId, username, email) {
-  // Close any other open edit forms
+function openEditUser(userId) {
   document.querySelectorAll('.user-edit-form').forEach(f => f.classList.add('hidden'));
   document.getElementById(`user-edit-${userId}`).classList.remove('hidden');
   document.getElementById(`edit-username-${userId}`).focus();

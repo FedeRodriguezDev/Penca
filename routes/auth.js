@@ -15,12 +15,18 @@ router.post('/register', async (req, res) => {
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
+    if (username.trim().length > 50) {
+      return res.status(400).json({ error: 'El nombre de usuario no puede superar 50 caracteres' });
+    }
     const cleanEmail = email.toLowerCase().trim();
-    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+    if (cleanEmail.length > 254 || !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
       return res.status(400).json({ error: 'Email inválido' });
     }
     if (password.length < 6) {
       return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+    if (password.length > 128) {
+      return res.status(400).json({ error: 'La contraseña no puede superar 128 caracteres' });
     }
 
     const hash = await bcrypt.hash(password, 10);

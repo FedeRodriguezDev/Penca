@@ -1,5 +1,12 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'mundial2026_secret_cambia_esto_en_produccion';
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: JWT_SECRET env var no configurado en producción');
+    process.exit(1);
+  }
+  console.warn('⚠️  JWT_SECRET no configurado — usando valor de desarrollo. NO usar en producción.');
+  return 'mundial2026_secret_cambia_esto_en_produccion';
+})();
 
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;

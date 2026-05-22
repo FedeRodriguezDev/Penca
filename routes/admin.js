@@ -12,19 +12,29 @@ router.post('/result', adminMiddleware, async (req, res) => {
     if (match_id == null || home_score == null || away_score == null) {
       return res.status(400).json({ error: 'match_id, home_score y away_score requeridos' });
     }
+    const homeInt = Number.parseInt(home_score, 10);
+    const awayInt = Number.parseInt(away_score, 10);
+    if (!Number.isInteger(homeInt) || !Number.isInteger(awayInt) || homeInt < 0 || awayInt < 0 || homeInt > 99 || awayInt > 99) {
+      return res.status(400).json({ error: 'Marcador inválido' });
+    }
+    const VALID_STATUSES = ['upcoming', 'live', 'finished'];
+    const safeStatus = status && VALID_STATUSES.includes(status) ? status : 'finished';
+    if (status && !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'Estado inválido' });
+    }
 
     const match = await db.prepare('SELECT * FROM matches WHERE id = $1').get(match_id);
     if (!match) return res.status(404).json({ error: 'Partido no encontrado' });
 
     await db.prepare(`
       UPDATE matches SET home_score = $1, away_score = $2, status = $3 WHERE id = $4
-    `).run(home_score, away_score, status || 'finished', match_id);
+    `).run(homeInt, awayInt, safeStatus, match_id);
 
     // Recalculate points for all predictions on this match
-    if (status === 'finished' || !status) {
+    if (safeStatus === 'finished') {
       const predictions = await db.prepare('SELECT * FROM predictions WHERE match_id = $1').all(match_id);
       for (const pred of predictions) {
-        const pts = calculatePoints(pred.home_score, pred.away_score, home_score, away_score);
+        const pts = calculatePoints(pred.home_score, pred.away_score, homeInt, awayInt);
         await db.prepare('UPDATE predictions SET points = $1 WHERE id = $2').run(pts, pred.id);
       }
     }
@@ -63,6 +73,10 @@ router.post('/match', adminMiddleware, async (req, res) => {
 // PUT /api/admin/match/:id - update match info
 router.put('/match/:id', adminMiddleware, async (req, res) => {
   try {
+    const matchId = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(matchId) || matchId <= 0) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
     const { home_team, away_team, match_date, match_time, venue, city, status } = req.body;
     const kickoffAt = buildKickoffAtFromLocal(match_date || null, match_time || null);
     
@@ -80,7 +94,7 @@ router.put('/match/:id', adminMiddleware, async (req, res) => {
     if (city) { updates.push(`city = $${paramCount}`); values.push(city); paramCount++; }
     if (status) { updates.push(`status = $${paramCount}`); values.push(status); paramCount++; }
     
-    values.push(req.params.id);
+    values.push(matchId);
     
     if (updates.length > 0) {
       const sql = `UPDATE matches SET ${updates.join(', ')} WHERE id = $${paramCount}`;
@@ -108,6 +122,10 @@ router.get('/users', adminMiddleware, async (req, res) => {
 // PUT /api/admin/users/:id - update user data (username, email)
 router.put('/users/:id', adminMiddleware, async (req, res) => {
   try {
+    const userId = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
     const { username, email } = req.body;
     if (!username && !email) {
       return res.status(400).json({ error: 'Se requiere al menos username o email' });
@@ -120,7 +138,7 @@ router.put('/users/:id', adminMiddleware, async (req, res) => {
     if (username) { updates.push(`username = $${paramCount}`); values.push(username.trim()); paramCount++; }
     if (email) { updates.push(`email = $${paramCount}`); values.push(email.trim().toLowerCase()); paramCount++; }
 
-    values.push(req.params.id);
+    values.push(userId);
     const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramCount}`;
     const result = await db.prepare(sql).run(...values);
 
@@ -138,8 +156,12 @@ router.put('/users/:id', adminMiddleware, async (req, res) => {
 // PUT /api/admin/users/:id/admin - toggle admin
 router.put('/users/:id/admin', adminMiddleware, async (req, res) => {
   try {
+    const userId = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
     const { is_admin } = req.body;
-    await db.prepare('UPDATE users SET is_admin = $1 WHERE id = $2').run(is_admin ? 1 : 0, req.params.id);
+    await db.prepare('UPDATE users SET is_admin = $1 WHERE id = $2').run(is_admin ? 1 : 0, userId);
     res.json({ message: 'Usuario actualizado' });
   } catch (err) {
     console.error('Toggle admin error:', err);

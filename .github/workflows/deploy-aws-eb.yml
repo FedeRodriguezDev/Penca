@@ -52,6 +52,7 @@ jobs:
           SMTP_USER:      ${{ vars.SMTP_USER }}
           EMAIL_FROM:     ${{ vars.EMAIL_FROM }}
           EMAIL_REPLY_TO: ${{ vars.EMAIL_REPLY_TO }}
+          JWT_SECRET:      ${{ secrets.JWT_SECRET }}
         run: |
           mkdir -p .ebextensions
           jq -n \
@@ -63,6 +64,7 @@ jobs:
             --arg smtp_user      "$SMTP_USER"      \
             --arg email_from     "$EMAIL_FROM"     \
             --arg email_reply_to "$EMAIL_REPLY_TO" \
+            --arg jwt_secret     "$JWT_SECRET"     \
             '{
               option_settings: [
                 {namespace:"aws:elasticbeanstalk:application:environment",option_name:"SMTP_HOST",      value:$smtp_host},
@@ -72,7 +74,8 @@ jobs:
                 {namespace:"aws:elasticbeanstalk:application:environment",option_name:"SMTP_PASS",      value:$smtp_pass},
                 {namespace:"aws:elasticbeanstalk:application:environment",option_name:"EMAIL_FROM",     value:$email_from},
                 {namespace:"aws:elasticbeanstalk:application:environment",option_name:"EMAIL_REPLY_TO", value:$email_reply_to},
-                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"APP_BASE_URL",   value:$app_base_url}
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"APP_BASE_URL",   value:$app_base_url},
+                {namespace:"aws:elasticbeanstalk:application:environment",option_name:"JWT_SECRET",     value:$jwt_secret}
               ]
             }' > .ebextensions/01_environment.config
 

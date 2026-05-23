@@ -249,13 +249,12 @@ function buildVerificationResultPage({ success, message }) {
       .title { margin:0 0 12px; color:${success ? '#4a9de0' : '#E53935'}; font-size:28px; }
       .msg { margin:0 0 20px; color:#C8DAF0; line-height:1.5; }
       .link { display:inline-block; background:#E53935; color:#fff; text-decoration:none; padding:12px 16px; border-radius:10px; font-weight:700; }
-      .logo { border:1px dashed #C8DAF0; border-radius:10px; display:inline-block; margin-bottom:14px; padding:8px 12px; color:#C8DAF0; font-size:12px; }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="card">
-        <div class="logo">Espacio para logo Infoclub Soluciones</div>
+        <img src="${escapeHtml(BRAND.logoUrl)}" alt="${escapeHtml(BRAND.name)}" style="display:block;max-width:160px;width:100%;height:auto;margin-bottom:18px;">
         <h1 class="title">${success ? 'Email verificado' : 'Verificación fallida'}</h1>
         <p class="msg">${safeMessage}</p>
         <a class="link" href="${escapeHtml(BRAND.siteUrl)}">Ir a Penca Infoclub</a>

@@ -11,7 +11,7 @@ const router = express.Router();
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, phone_number } = req.body;
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
@@ -29,14 +29,24 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'La contraseña no puede superar 128 caracteres' });
     }
 
+    // Phone validation (required)
+    if (!phone_number) {
+      return res.status(400).json({ error: 'El número de teléfono es requerido' });
+    }
+    const phoneStr = String(phone_number).trim();
+    if (!/^\+[1-9]\d{6,14}$/.test(phoneStr)) {
+      return res.status(400).json({ error: 'Número de teléfono inválido' });
+    }
+    const cleanPhone = phoneStr;
+
     const hash = await bcrypt.hash(password, 10);
     // First user becomes admin
     const userCount = await db.prepare('SELECT COUNT(*) as cnt FROM users').get();
     const isAdmin = userCount.cnt === 0 ? 1 : 0;
     
     const result = await db.prepare(
-      'INSERT INTO users (username, email, password_hash, email_verified, is_admin) VALUES ($1, $2, $3, $4, $5) RETURNING id'
-    ).run(username.trim(), cleanEmail, hash, false, isAdmin);
+      'INSERT INTO users (username, email, password_hash, email_verified, is_admin, phone_number) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id'
+    ).run(username.trim(), cleanEmail, hash, false, isAdmin, cleanPhone);
     
     const userId = result.rows?.[0]?.id || result.lastID;
 

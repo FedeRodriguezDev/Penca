@@ -10,6 +10,7 @@ let activeGroup = 'all';
 let toastTimer = null;
 let currentPage = 'matches';
 let pageRefreshTimer = null;
+let phoneIti = null;
 const UTC_MINUS_3_OFFSET_MS = -3 * 60 * 60 * 1000;
 const PAGE_AUTO_REFRESH_MS = 60 * 1000;
 
@@ -35,6 +36,15 @@ function safeSrc(url) {
 // BOOTSTRAP
 // ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
+  // Initialize phone number input with country selector
+  const phoneEl = document.getElementById('reg-phone');
+  if (phoneEl && window.intlTelInput) {
+    phoneIti = window.intlTelInput(phoneEl, {
+      initialCountry: 'uy',
+      preferredCountries: ['uy', 'ar', 'br', 'py', 'bo', 'cl', 'pe', 'ec', 'co', 've'],
+    });
+  }
+
   if (token) {
     try {
       const me = await apiFetch('/auth/me');
@@ -115,8 +125,20 @@ async function register() {
   const passwordConfirm = document.getElementById('reg-password-confirm').value;
   if (!username || !email || !password || !passwordConfirm) return showAuthMsg('Completá todos los campos');
   if (password !== passwordConfirm) return showAuthMsg('Las contraseñas no coinciden');
+
+  // Validate phone number (required)
+  let phone_number = null;
+  if (phoneIti) {
+    const rawPhone = document.getElementById('reg-phone').value.trim();
+    if (!rawPhone) return showAuthMsg('El número de teléfono es requerido');
+    if (!phoneIti.isValidNumber()) {
+      return showAuthMsg('El número de teléfono no es válido para el país seleccionado');
+    }
+    phone_number = phoneIti.getNumber(); // E.164 format e.g. +59812345678
+  }
+
   try {
-    await apiFetch('/auth/register', 'POST', { username, email, password });
+    await apiFetch('/auth/register', 'POST', { username, email, password, phone_number });
     document.getElementById('register-form').classList.add('hidden');
     document.getElementById('register-success-email').textContent = email;
     document.getElementById('register-success').classList.remove('hidden');

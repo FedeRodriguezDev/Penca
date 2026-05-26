@@ -76,7 +76,7 @@ Las rutas `/api/auth/*` tienen límite de 20 req / 15 min por IP via un mapa en 
 
 ## Deploy
 
-**Pipeline**: push a `main` → GitHub Actions → AWS Elastic Beanstalk (`PencaAncap2026-prod`, `sa-east-1`) con autenticación OIDC.
+**Pipeline**: push a `main` → GitHub Actions → AWS Elastic Beanstalk (`PencaAncap2026-https`, `sa-east-1`) con autenticación OIDC.
 
 **Infraestructura**: **Classic Load Balancer** (no ALB). Usar CLI `aws elb`, **no** `aws elbv2`. El redirect HTTP→HTTPS se hace a nivel de app (header `X-Forwarded-Proto`).
 

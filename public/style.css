@@ -284,6 +284,7 @@ button { cursor: pointer; font-family: inherit; }
   top: 0;
   z-index: 100;
   backdrop-filter: blur(10px);
+  overflow: hidden;
 }
 .nav-brand {
   font-size: 1.1rem;
@@ -293,6 +294,7 @@ button { cursor: pointer; font-family: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 .nav-brand span { display: none;
 font-weight: 1000; 
@@ -305,7 +307,7 @@ color: #df3b20;
   
 }
 @media (min-width: 600px) { .nav-brand span { display: inline; } }
-.nav-tabs { display: flex; gap: 4px; flex: 1; }
+.nav-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
 .nav-tab {
   background: transparent;
   border: none;
@@ -315,6 +317,7 @@ color: #df3b20;
   font-weight: 600;
   font-size: 0.88rem;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 .nav-tab:hover { background: var(--bg-card2); color: var(--text); }
 .nav-tab.active { background: var(--green); color: white; }
@@ -324,9 +327,25 @@ color: #df3b20;
   gap: 10px;
   font-size: 0.88rem;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 #nav-username { color: var(--text-muted); font-weight: 600; display: none; }
 @media (min-width: 500px) { #nav-username { display: inline; } }
+
+@media (max-width: 480px) {
+  .navbar {
+    padding: 0 10px;
+    gap: 8px;
+    height: 60px;
+  }
+  .nav-tab {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+  .nav-logo-img {
+    height: 22px;
+  }
+}
 
 /* ===== MAIN ===== */
 .main-content { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }

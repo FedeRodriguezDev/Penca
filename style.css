@@ -689,6 +689,61 @@ color: #df3b20;
 .lb-num { text-align: center; color: var(--text-muted); }
 .lb-exact { color: var(--gold); }
 
+/* ===== PREMIOS ===== */
+.premios-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+@media (max-width: 600px) {
+  .premios-grid { grid-template-columns: 1fr; }
+}
+.premio-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 20px;
+  text-align: center;
+  transition: transform 0.15s;
+}
+.premio-card:hover { transform: translateY(-2px); }
+.premio-oro  { border-color: #ffd700; box-shadow: 0 0 16px rgba(255,215,0,0.15); }
+.premio-plata { border-color: #c0c0c0; box-shadow: 0 0 16px rgba(192,192,192,0.12); }
+.premio-bronce { border-color: #cd7f32; box-shadow: 0 0 16px rgba(205,127,50,0.12); }
+.premio-icon { font-size: 3rem; margin-bottom: 12px; }
+.premio-rank { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 10px; }
+.premio-desc { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+
+.premios-reglas {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+.premios-reglas h3 { font-size: 1rem; font-weight: 700; color: var(--gold-light); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+.regla-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.regla-item:last-child { border-bottom: none; }
+.regla-pts {
+  display: inline-block;
+  min-width: 52px;
+  text-align: center;
+  font-weight: 900;
+  font-size: 1rem;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.regla-pts-exacto   { background: rgba(255,215,0,0.15); color: #ffd700; }
+.regla-pts-resultado { background: rgba(0,87,166,0.2); color: var(--green-light); }
+.regla-pts-incorrecto { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+.regla-label { font-size: 0.92rem; color: var(--text); }
+
 /* ===== ADMIN ===== */
 .admin-tabs {
   display: flex;

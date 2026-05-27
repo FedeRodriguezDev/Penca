@@ -148,6 +148,7 @@
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="showPage('matches')" data-page="matches">Partidos</button>
       <button class="nav-tab" onclick="showPage('leaderboard')" data-page="leaderboard">Tabla</button>
+      <button class="nav-tab" onclick="showPage('premios')" data-page="premios">Premios</button>
       <button class="nav-tab" id="admin-tab" onclick="showPage('admin')" data-page="admin" style="display:none">Admin</button>
     </div>
     <div class="nav-user">
@@ -176,6 +177,46 @@
       </div>
       <div id="stats-bar" class="stats-bar"></div>
       <div id="leaderboard-container"></div>
+    </div>
+
+    <!-- PREMIOS PAGE -->
+    <div id="page-premios" class="page hidden">
+      <div class="page-header">
+        <h2>Premios</h2>
+        <p class="page-desc">Los mejores pronosticadores del Mundial 2026 se llevan los premios. ¡Pronosticá mejor que todos!</p>
+      </div>
+      <div class="premios-grid">
+        <div class="premio-card premio-oro">
+          <div class="premio-icon">🥇</div>
+          <div class="premio-rank">1er Puesto</div>
+          <div class="premio-desc">Premio a definir</div>
+        </div>
+        <div class="premio-card premio-plata">
+          <div class="premio-icon">🥈</div>
+          <div class="premio-rank">2do Puesto</div>
+          <div class="premio-desc">Premio a definir</div>
+        </div>
+        <div class="premio-card premio-bronce">
+          <div class="premio-icon">🥉</div>
+          <div class="premio-rank">3er Puesto</div>
+          <div class="premio-desc">Premio a definir</div>
+        </div>
+      </div>
+      <div class="premios-reglas">
+        <h3>Sistema de puntos</h3>
+        <div class="regla-item">
+          <span class="regla-pts regla-pts-exacto">3 pts</span>
+          <span class="regla-label">Marcador exacto</span>
+        </div>
+        <div class="regla-item">
+          <span class="regla-pts regla-pts-resultado">1 pt</span>
+          <span class="regla-label">Resultado correcto (ganador o empate)</span>
+        </div>
+        <div class="regla-item">
+          <span class="regla-pts regla-pts-incorrecto">0 pts</span>
+          <span class="regla-label">Pronóstico incorrecto</span>
+        </div>
+      </div>
     </div>
 
     <!-- ADMIN PAGE -->

@@ -71,6 +71,7 @@ function showApp() {
   document.getElementById('nav-username').textContent = `👤 ${currentUser.username}`;
   if (currentUser.is_admin) {
     document.getElementById('admin-tab').style.display = '';
+    document.getElementById('admin-tab-mobile').style.display = '';
   }
   showPage('matches');
 }
@@ -155,6 +156,7 @@ function logout() {
   currentUser = null;
   allMatches = {};
   document.getElementById('admin-tab').style.display = 'none';
+  document.getElementById('admin-tab-mobile').style.display = 'none';
   showAuth();
 }
 
@@ -166,8 +168,7 @@ function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById(`page-${page}`).classList.remove('hidden');
-  const navTab = document.querySelector(`[data-page="${page}"]`);
-  if (navTab) navTab.classList.add('active');
+  document.querySelectorAll(`[data-page="${page}"]`).forEach(t => t.classList.add('active'));
   resetPageAutoRefresh(page);
 
   if (page === 'matches') loadMatches();

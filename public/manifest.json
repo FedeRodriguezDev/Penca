@@ -1,19 +1,29 @@
 {
   "name": "Penca Infoclub",
   "short_name": "Penca",
-  "description": "Pronósticos del Mundial 2026",
+  "description": "Pronósticos del Mundial FIFA 2026 – Competí con amigos en Infoclub",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#0d1e33",
   "theme_color": "#0d1e33",
   "lang": "es-UY",
-  "categories": ["sports", "games"],
+  "categories": ["sports", "games", "entertainment"],
   "icons": [
     {
       "src": "/img/logo_infoclub.png",
       "sizes": "any",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/img/logo_infoclub.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Pantalla principal de Penca Infoclub"
     }
   ]
 }

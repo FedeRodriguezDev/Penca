@@ -10,6 +10,10 @@ require('./db/database');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Elastic Beanstalk sits behind a load balancer/reverse proxy, so trust the
+// forwarded client IP when applying per-IP protections like auth rate limiting.
+app.set('trust proxy', 1);
+
 // Simple in-memory rate limiter (no external dependency)
 const _rlMap = new Map();
 const RL_WINDOW_MS = 15 * 60 * 1000; // 15 min

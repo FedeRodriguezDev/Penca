@@ -14,20 +14,37 @@ const PORT = process.env.PORT || 3000;
 // forwarded client IP when applying per-IP protections like auth rate limiting.
 app.set('trust proxy', 1);
 
-// Simple in-memory rate limiter (no external dependency)
+// Rate limiter for failed login attempts only.
+// Only counts 401/403 responses from POST /api/auth/login; successful logins
+// and other auth endpoints do not consume quota.
 const _rlMap = new Map();
 const RL_WINDOW_MS = 15 * 60 * 1000; // 15 min
-const RL_MAX = 20;
+const RL_MAX = 20; // failed attempts per IP before blocking
 function authRateLimiter(req, res, next) {
+  // Only rate-limit POST /api/auth/login
+  if (req.method !== 'POST' || !req.path.endsWith('/login')) return next();
+
   const ip = req.ip || req.socket?.remoteAddress || 'unknown';
   const now = Date.now();
   const entry = _rlMap.get(ip) || { count: 0, resetAt: now + RL_WINDOW_MS };
   if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + RL_WINDOW_MS; }
-  entry.count++;
-  _rlMap.set(ip, entry);
-  if (entry.count > RL_MAX) {
-    return res.status(429).json({ error: 'Demasiados intentos. Intentá de nuevo en 15 minutos.' });
+
+  // Block before even hitting the handler if already over the limit
+  if (entry.count >= RL_MAX) {
+    const minutesLeft = Math.ceil((entry.resetAt - now) / 60000);
+    return res.status(429).json({ error: `Demasiados intentos fallidos. Intentá de nuevo en ${minutesLeft} minuto${minutesLeft !== 1 ? 's' : ''}.` });
   }
+
+  // Intercept the response to count only failures (4xx)
+  const originalJson = res.json.bind(res);
+  res.json = function (body) {
+    if (res.statusCode >= 400 && res.statusCode < 500) {
+      entry.count++;
+      _rlMap.set(ip, entry);
+    }
+    return originalJson(body);
+  };
+
   next();
 }
 // Clean up expired entries hourly to avoid memory leak

@@ -15,18 +15,20 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // Rate limiter for failed login attempts only.
-// Only counts 401/403 responses from POST /api/auth/login; successful logins
-// and other auth endpoints do not consume quota.
+// Track by client IP + target email to avoid blocking many users behind the
+// same NAT/shared network while still slowing brute-force attempts.
 const _rlMap = new Map();
 const RL_WINDOW_MS = 15 * 60 * 1000; // 15 min
-const RL_MAX = 20; // failed attempts per IP before blocking
+const RL_MAX = 200; // failed attempts per IP before blocking
 function authRateLimiter(req, res, next) {
   // Only rate-limit POST /api/auth/login
   if (req.method !== 'POST' || !req.path.endsWith('/login')) return next();
 
   const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const limiterKey = `${ip}:${email || 'unknown-email'}`;
   const now = Date.now();
-  const entry = _rlMap.get(ip) || { count: 0, resetAt: now + RL_WINDOW_MS };
+  const entry = _rlMap.get(limiterKey) || { count: 0, resetAt: now + RL_WINDOW_MS };
   if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + RL_WINDOW_MS; }
 
   // Block before even hitting the handler if already over the limit
@@ -38,9 +40,9 @@ function authRateLimiter(req, res, next) {
   // Intercept the response to count only failures (4xx)
   const originalJson = res.json.bind(res);
   res.json = function (body) {
-    if (res.statusCode >= 400 && res.statusCode < 500) {
+    if (res.statusCode === 401) {
       entry.count++;
-      _rlMap.set(ip, entry);
+      _rlMap.set(limiterKey, entry);
     }
     return originalJson(body);
   };

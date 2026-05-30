@@ -39,6 +39,11 @@ router.post('/register', async (req, res) => {
     }
     const cleanPhone = phoneStr;
 
+    const existingPhoneUser = await db.prepare('SELECT id FROM users WHERE phone_number = $1 LIMIT 1').get(cleanPhone);
+    if (existingPhoneUser) {
+      return res.status(400).json({ error: 'Ese número de teléfono ya está registrado' });
+    }
+
     const hash = await bcrypt.hash(password, 10);
     // First user becomes admin
     const userCount = await db.prepare('SELECT COUNT(*) as cnt FROM users').get();
@@ -64,7 +69,10 @@ router.post('/register', async (req, res) => {
     });
   } catch (err) {
     console.error('Register error:', err);
-    if (err.message?.includes('UNIQUE') || err.code === '23505') {
+    if (err.code === '23505') {
+      if (err.constraint === 'idx_users_phone_number_unique') {
+        return res.status(400).json({ error: 'Ese número de teléfono ya está registrado' });
+      }
       return res.status(400).json({ error: 'El usuario o email ya está registrado' });
     }
     res.status(500).json({ error: 'Error al registrar usuario' });

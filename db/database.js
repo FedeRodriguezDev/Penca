@@ -157,6 +157,25 @@ async function initializeDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_match_reminders BOOLEAN DEFAULT TRUE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_prediction_results BOOLEAN DEFAULT TRUE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number TEXT`);
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_indexes
+          WHERE schemaname = 'public' AND indexname = 'idx_users_phone_number_unique'
+        ) THEN
+          BEGIN
+            CREATE UNIQUE INDEX idx_users_phone_number_unique
+              ON users(phone_number)
+              WHERE phone_number IS NOT NULL;
+          EXCEPTION WHEN unique_violation THEN
+            RAISE NOTICE 'No se pudo crear índice único de phone_number por duplicados históricos';
+          END;
+        END IF;
+      END
+      $$;
+    `);
 
     console.log('✅ Schema creado correctamente');
 

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { db } = require('../db/database');
 const { sendEmail } = require('./emailService');
 const {
+  buildPasswordResetEmail,
   buildReminderEmail,
   buildResultEmail,
   buildVerificationEmail,
@@ -9,6 +10,7 @@ const {
 
 const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
 const EMAIL_VERIFICATION_TTL_HOURS = Number(process.env.EMAIL_VERIFICATION_TTL_HOURS || 24);
+const PASSWORD_RESET_TTL_HOURS = Number(process.env.PASSWORD_RESET_TTL_HOURS || 2);
 const EMAIL_REMINDER_LEAD_MINUTES = Number(process.env.EMAIL_REMINDER_LEAD_MINUTES || 120);
 const EMAIL_NOTIFICATION_CHECK_MS = Number(process.env.EMAIL_NOTIFICATION_CHECK_MS || 5 * 60 * 1000);
 
@@ -18,6 +20,10 @@ function createVerificationToken() {
 
 function getVerificationExpiryDate() {
   return new Date(Date.now() + EMAIL_VERIFICATION_TTL_HOURS * 60 * 60 * 1000);
+}
+
+function getPasswordResetExpiryDate() {
+  return new Date(Date.now() + PASSWORD_RESET_TTL_HOURS * 60 * 60 * 1000);
 }
 
 async function sendVerificationEmail({ userId, username, email }) {
@@ -42,6 +48,31 @@ async function sendVerificationEmail({ userId, username, email }) {
     text: content.text,
     headers: {
       'X-Email-Type': 'verification',
+    },
+  });
+}
+
+async function sendPasswordResetEmail({ userId, username, email }) {
+  const token = createVerificationToken();
+  const expiresAt = getPasswordResetExpiryDate().toISOString();
+
+  await db.prepare(`
+    UPDATE users
+    SET password_reset_token = $1,
+        password_reset_expires_at = $2
+    WHERE id = $3
+  `).run(token, expiresAt, userId);
+
+  const resetUrl = `${APP_BASE_URL}/?reset_token=${encodeURIComponent(token)}`;
+  const content = buildPasswordResetEmail({ username, resetUrl });
+
+  return sendEmail({
+    to: email,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+    headers: {
+      'X-Email-Type': 'password-reset',
     },
   });
 }
@@ -199,6 +230,7 @@ function startEmailNotificationScheduler() {
 module.exports = {
   EMAIL_VERIFICATION_TTL_HOURS,
   createVerificationToken,
+  sendPasswordResetEmail,
   sendVerificationEmail,
   startEmailNotificationScheduler,
 };

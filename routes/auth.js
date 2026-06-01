@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db } = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
-const { sendVerificationEmail } = require('../services/emailNotifications');
+const { sendPasswordResetEmail, sendVerificationEmail } = require('../services/emailNotifications');
 const { buildVerificationResultPage } = require('../services/emailTemplates');
 
 const router = express.Router();
@@ -217,6 +217,79 @@ router.post('/resend-verification', async (req, res) => {
   } catch (err) {
     console.error('Resend verification error:', err);
     return res.status(500).json({ error: 'No se pudo reenviar el correo de verificación' });
+  }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').toLowerCase().trim();
+    if (!email) {
+      return res.status(400).json({ error: 'Email requerido' });
+    }
+
+    const user = await db.prepare('SELECT id, username, email FROM users WHERE email = $1').get(email);
+    if (user) {
+      await sendPasswordResetEmail({
+        userId: user.id,
+        username: user.username,
+        email: user.email,
+      });
+    }
+
+    return res.json({
+      message: 'Si existe una cuenta con ese email, te enviamos un enlace para cambiar tu contraseña.',
+    });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({ error: 'No se pudo procesar la solicitud de cambio de contraseña' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    const newPassword = String(req.body?.new_password || '');
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token y nueva contraseña son requeridos' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+    if (newPassword.length > 128) {
+      return res.status(400).json({ error: 'La contraseña no puede superar 128 caracteres' });
+    }
+
+    const user = await db.prepare(`
+      SELECT id, password_reset_expires_at
+      FROM users
+      WHERE password_reset_token = $1
+    `).get(token);
+
+    if (!user) {
+      return res.status(400).json({ error: 'El enlace de cambio de contraseña no es válido' });
+    }
+
+    const expiresAt = new Date(user.password_reset_expires_at || '');
+    if (Number.isNaN(expiresAt.getTime()) || Date.now() > expiresAt.getTime()) {
+      return res.status(400).json({ error: 'El enlace de cambio de contraseña expiró. Solicitá uno nuevo.' });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.prepare(`
+      UPDATE users
+      SET password_hash = $1,
+          password_reset_token = NULL,
+          password_reset_expires_at = NULL
+      WHERE id = $2
+    `).run(hash, user.id);
+
+    return res.json({ message: 'Contraseña actualizada correctamente. Ya podés iniciar sesión.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    return res.status(500).json({ error: 'No se pudo restablecer la contraseña' });
   }
 });
 

@@ -45,11 +45,12 @@ function getLogoBlock() {
   return `<div style="border:1px dashed ${BRAND.colors.muted};border-radius:10px;padding:10px 14px;color:${BRAND.colors.muted};font-size:12px;text-align:center;">Espacio para logo de ${escapeHtml(BRAND.name)}</div>`;
 }
 
-function renderLayout({ preheader, title, intro, bodyHtml, ctaLabel, ctaUrl, footerReason }) {
+function renderLayout({ preheader, title, intro, bodyHtml, ctaLabel, ctaUrl, footerReason, headerBackground }) {
   const safePreheader = escapeHtml(preheader);
   const safeTitle = escapeHtml(title);
   const safeIntro = escapeHtml(intro);
   const safeFooterReason = escapeHtml(footerReason);
+  const resolvedHeaderBackground = headerBackground || `linear-gradient(180deg, ${BRAND.colors.primary} 0%, ${BRAND.colors.primaryDark} 100%)`;
 
   return `<!doctype html>
 <html lang="es">
@@ -66,7 +67,7 @@ function renderLayout({ preheader, title, intro, bodyHtml, ctaLabel, ctaUrl, foo
         <td align="center">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background:${BRAND.colors.card};border:1px solid #1E3A60;border-radius:14px;overflow:hidden;">
             <tr>
-              <td style="padding:24px 24px 12px 24px;background:linear-gradient(180deg, ${BRAND.colors.primary} 0%, ${BRAND.colors.primaryDark} 100%);">
+              <td style="padding:24px 24px 12px 24px;background:${resolvedHeaderBackground};">
                 ${getLogoBlock()}
                 <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:${BRAND.colors.muted};margin-top:12px;">${escapeHtml(BRAND.appName)}</div>
                 <h1 style="margin:8px 0 0 0;color:#ffffff;font-size:24px;line-height:1.3;">${safeTitle}</h1>
@@ -122,6 +123,7 @@ function buildVerificationEmail({ username, verifyUrl }) {
     ctaLabel: 'Verificar email',
     ctaUrl: verifyUrl,
     footerReason: 'te registraste en Penca Infoclub',
+    headerBackground: BRAND.colors.primaryDark,
   });
 
   const text = [
@@ -131,6 +133,44 @@ function buildVerificationEmail({ username, verifyUrl }) {
     verifyUrl,
     '',
     'Este enlace expira en 24 horas.',
+    '',
+    'Penca Infoclub - Infoclub Soluciones',
+  ].join('\n');
+
+  return { subject, preheader, html, text };
+}
+
+function buildPasswordResetEmail({ username, resetUrl }) {
+  const subject = 'Recuperar contraseña en Penca Infoclub';
+  const preheader = 'Solicitaste cambiar tu contraseña.';
+  const title = 'Restablecer contraseña';
+  const intro = `Hola ${username}, recibimos una solicitud para cambiar tu contraseña.`;
+  const bodyHtml = `
+    <p style="margin:0 0 12px 0;">Si fuiste vos, hacé clic en el botón para definir una nueva contraseña.</p>
+    <p style="margin:0 0 12px 0;">Este enlace expira en 2 horas por seguridad.</p>
+    <p style="margin:0 0 12px 0;">Si no solicitaste este cambio, podés ignorar este correo.</p>
+    <p style="margin:0;word-break:break-word;font-size:13px;color:${BRAND.colors.muted};">Si el botón no funciona, copiá y pegá este enlace en tu navegador:<br><a href="${escapeHtml(resetUrl)}" style="color:${BRAND.colors.muted};">${escapeHtml(resetUrl)}</a></p>
+  `;
+
+  const html = renderLayout({
+    preheader,
+    title,
+    intro,
+    bodyHtml,
+    ctaLabel: 'Cambiar contraseña',
+    ctaUrl: resetUrl,
+    footerReason: 'solicitaste recuperar tu contraseña en Penca Infoclub',
+  });
+
+  const text = [
+    `Hola ${username},`,
+    '',
+    'Recibimos una solicitud para cambiar tu contraseña.',
+    'Usá este enlace para restablecerla:',
+    resetUrl,
+    '',
+    'Este enlace expira en 2 horas.',
+    'Si no solicitaste el cambio, ignorá este mensaje.',
     '',
     'Penca Infoclub - Infoclub Soluciones',
   ].join('\n');
@@ -265,6 +305,7 @@ function buildVerificationResultPage({ success, message }) {
 }
 
 module.exports = {
+  buildPasswordResetEmail,
   buildReminderEmail,
   buildResultEmail,
   buildVerificationEmail,

@@ -142,6 +142,44 @@
         <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
       </div>
       <button class="btn-primary btn-full" onclick="login()">Entrar</button>
+      <div class="auth-actions">
+        <button type="button" class="auth-link-btn" onclick="showForgotPassword()">¿Olvidaste tu contraseña?</button>
+      </div>
+    </div>
+
+    <!-- FORGOT PASSWORD -->
+    <div id="forgot-password-form" class="hidden">
+      <div class="register-notice">
+        Ingresá tu email y te enviaremos un enlace para cambiar la contraseña.
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="forgot-email" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <button class="btn-primary btn-full" onclick="requestPasswordReset()">Enviar enlace</button>
+      <div class="auth-actions">
+        <button type="button" class="auth-link-btn" onclick="showAuthTab('login')">Volver al login</button>
+      </div>
+    </div>
+
+    <!-- RESET PASSWORD -->
+    <div id="reset-password-form" class="hidden">
+      <div class="register-notice">
+        Definí tu nueva contraseña para ingresar a la penca.
+      </div>
+      <input type="hidden" id="reset-token">
+      <div class="field">
+        <label>Nueva contraseña</label>
+        <input type="password" id="reset-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label>Confirmar contraseña</label>
+        <input type="password" id="reset-password-confirm" placeholder="Repetí tu contraseña" autocomplete="new-password">
+      </div>
+      <button class="btn-primary btn-full" onclick="submitPasswordReset()">Guardar nueva contraseña</button>
+      <div class="auth-actions">
+        <button type="button" class="auth-link-btn" onclick="showAuthTab('login')">Cancelar</button>
+      </div>
     </div>
 
     <!-- REGISTER -->

@@ -88,6 +88,8 @@ async function initializeDatabase() {
         email_verified BOOLEAN DEFAULT FALSE,
         email_verification_token TEXT,
         email_verification_expires_at TEXT,
+        password_reset_token TEXT,
+        password_reset_expires_at TEXT,
         email_verification_sent_at TIMESTAMP,
         notify_match_reminders BOOLEAN DEFAULT TRUE,
         notify_prediction_results BOOLEAN DEFAULT TRUE,
@@ -153,6 +155,8 @@ async function initializeDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token TEXT`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires_at TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TEXT`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_sent_at TIMESTAMP`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_match_reminders BOOLEAN DEFAULT TRUE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_prediction_results BOOLEAN DEFAULT TRUE`);

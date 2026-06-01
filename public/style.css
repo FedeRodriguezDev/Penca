@@ -123,6 +123,20 @@ button { cursor: pointer; font-family: inherit; }
 }
 .auth-msg.error { background: rgba(229,57,53,0.15); border: 1px solid rgba(229,57,53,0.3); color: #ff8a80; }
 .auth-msg.success { background: rgba(45,168,75,0.15); border: 1px solid rgba(45,168,75,0.3); color: #69f0ae; }
+.auth-actions {
+  margin-top: 10px;
+  text-align: center;
+}
+.auth-link-btn {
+  background: transparent;
+  border: none;
+  color: var(--blue-light);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 4px;
+}
+.auth-link-btn:hover { color: var(--text); }
 
 .register-notice {
   display: flex;

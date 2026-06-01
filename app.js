@@ -14,6 +14,24 @@ let phoneIti = null;
 const UTC_MINUS_3_OFFSET_MS = -3 * 60 * 60 * 1000;
 const PAGE_AUTO_REFRESH_MS = 60 * 1000;
 
+function getResetTokenFromUrl() {
+  try {
+    return new URLSearchParams(window.location.search).get('reset_token') || '';
+  } catch {
+    return '';
+  }
+}
+
+function clearResetTokenFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reset_token');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // no-op
+  }
+}
+
 // ──────────────────────────────────────────
 // SECURITY HELPERS
 // ──────────────────────────────────────────
@@ -36,6 +54,13 @@ function safeSrc(url) {
 // BOOTSTRAP
 // ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
+  const resetToken = getResetTokenFromUrl();
+  if (resetToken) {
+    showAuth();
+    showResetPasswordForm(resetToken);
+    return;
+  }
+
   // Initialize phone number input with country selector
   const phoneEl = document.getElementById('reg-phone');
   if (phoneEl && window.intlTelInput) {
@@ -84,7 +109,33 @@ function showAuthTab(tab) {
   document.querySelectorAll('.auth-tab')[tab === 'login' ? 0 : 1].classList.add('active');
   document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
   document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+  document.getElementById('forgot-password-form').classList.add('hidden');
+  document.getElementById('reset-password-form').classList.add('hidden');
   if (tab !== 'register') document.getElementById('register-success').classList.add('hidden');
+  hideAuthMsg();
+}
+
+function showForgotPassword() {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.auth-tab')[0].classList.add('active');
+  document.getElementById('login-form').classList.add('hidden');
+  document.getElementById('register-form').classList.add('hidden');
+  document.getElementById('register-success').classList.add('hidden');
+  document.getElementById('reset-password-form').classList.add('hidden');
+  document.getElementById('forgot-password-form').classList.remove('hidden');
+  document.getElementById('forgot-email').value = document.getElementById('login-email').value.trim();
+  hideAuthMsg();
+}
+
+function showResetPasswordForm(resetToken) {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.auth-tab')[0].classList.add('active');
+  document.getElementById('login-form').classList.add('hidden');
+  document.getElementById('register-form').classList.add('hidden');
+  document.getElementById('register-success').classList.add('hidden');
+  document.getElementById('forgot-password-form').classList.add('hidden');
+  document.getElementById('reset-password-form').classList.remove('hidden');
+  document.getElementById('reset-token').value = resetToken || '';
   hideAuthMsg();
 }
 
@@ -145,6 +196,45 @@ async function register() {
     document.getElementById('register-success').classList.remove('hidden');
     document.getElementById('login-email').value = email;
     document.getElementById('login-password').value = '';
+  } catch (err) {
+    showAuthMsg(err.message);
+  }
+}
+
+async function requestPasswordReset() {
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email) return showAuthMsg('Ingresá tu email');
+
+  try {
+    const data = await apiFetch('/auth/forgot-password', 'POST', { email });
+    showAuthTab('login');
+    document.getElementById('login-email').value = email;
+    showAuthMsg(data.message || 'Te enviamos un enlace para cambiar tu contraseña si la cuenta existe.', false);
+  } catch (err) {
+    showAuthMsg(err.message);
+  }
+}
+
+async function submitPasswordReset() {
+  const tokenValue = document.getElementById('reset-token').value.trim();
+  const newPassword = document.getElementById('reset-password').value;
+  const confirmPassword = document.getElementById('reset-password-confirm').value;
+
+  if (!tokenValue) return showAuthMsg('El enlace de recuperación no es válido');
+  if (!newPassword || !confirmPassword) return showAuthMsg('Completá todos los campos');
+  if (newPassword.length < 6) return showAuthMsg('La contraseña debe tener al menos 6 caracteres');
+  if (newPassword !== confirmPassword) return showAuthMsg('Las contraseñas no coinciden');
+
+  try {
+    const data = await apiFetch('/auth/reset-password', 'POST', {
+      token: tokenValue,
+      new_password: newPassword,
+    });
+    clearResetTokenFromUrl();
+    showAuthTab('login');
+    document.getElementById('reset-password').value = '';
+    document.getElementById('reset-password-confirm').value = '';
+    showAuthMsg(data.message || 'Contraseña actualizada correctamente.', false);
   } catch (err) {
     showAuthMsg(err.message);
   }
@@ -799,5 +889,7 @@ function loadingHtml() {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   if (!document.getElementById('register-form').classList.contains('hidden')) register();
+  else if (!document.getElementById('forgot-password-form').classList.contains('hidden')) requestPasswordReset();
+  else if (!document.getElementById('reset-password-form').classList.contains('hidden')) submitPasswordReset();
   else if (!document.getElementById('login-form').classList.contains('hidden')) login();
 });

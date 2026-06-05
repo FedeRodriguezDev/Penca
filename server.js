@@ -94,7 +94,16 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    // HTML and JS must never be served from cache without revalidation.
+    // Mobile browsers — especially PWAs in standalone mode — can otherwise
+    // hold onto stale scripts indefinitely, breaking the app after deploys.
+    if (/\.(html|js|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  }
+}));
 
 // API Routes
 app.use('/api/auth', authRateLimiter, require('./routes/auth'));

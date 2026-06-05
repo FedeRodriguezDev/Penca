@@ -78,12 +78,14 @@ Las rutas `/api/auth/*` tienen límite de 20 req / 15 min por IP via un mapa en 
 
 **Pipeline**: push a `main` → GitHub Actions → AWS Elastic Beanstalk (`PencaAncap2026-https`, `sa-east-1`) con autenticación OIDC.
 
-**Infraestructura**: **Classic Load Balancer** (no ALB). Usar CLI `aws elb`, **no** `aws elbv2`. El redirect HTTP→HTTPS se hace a nivel de app (header `X-Forwarded-Proto`).
+**Infraestructura**: **Application Load Balancer (ALB)**. Usar CLI `aws elbv2`, **no** `aws elb`. Listeners en :80 y :443, ambos forwardean HTTP:80 a la instancia EC2. El redirect HTTP→HTTPS se hace a nivel de app (header `X-Forwarded-Proto`). El ALB termina TLS con certificado ACM.
 
 **GitHub Secrets**: `SMTP_PASS`, `JWT_SECRET`, `AWS_REGION`, `AWS_EB_APPLICATION`, `AWS_EB_ENVIRONMENT`, `AWS_EB_S3_BUCKET`.  
 **GitHub Variables**: `APP_BASE_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `EMAIL_FROM`, `EMAIL_REPLY_TO`.
 
 **Si EB muestra Red tras deploy**: verificar primero que las variables `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` están configuradas. Variables faltantes → Nginx 502. Para rotación de contraseñas de BD: usar solo caracteres alfanuméricos, `-`, `_` para evitar problemas de quoting en la CLI de EB.
+
+**Si tras un deploy el frontend se ve desactualizado en el celular**: el browser cachea agresivamente `app.js`. `server.js` ya envía `Cache-Control: no-cache, must-revalidate` para `.html`, `.js` y `.css`, pero si un usuario ya tiene el archivo cacheado de antes, necesita limpiar el cache del browser una sola vez.
 
 ## Sistema de puntos
 

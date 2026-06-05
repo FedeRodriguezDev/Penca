@@ -308,7 +308,11 @@ async function loadMatches({ silent = false, preserveScroll = false } = {}) {
     }
   } catch (err) {
     if (!silent) {
-      container.innerHTML = `<div class="empty">Error cargando partidos: ${err.message}</div>`;
+      container.innerHTML = `<div class="empty">
+        <p>Error cargando partidos</p>
+        <p class="hint">${escapeHtml(err.message)}</p>
+        <button class="btn btn-primary" onclick="loadMatches()" style="margin-top:1rem">Reintentar</button>
+      </div>`;
     }
   }
 }
@@ -803,21 +807,44 @@ function showAdminTab(tab) {
 // ──────────────────────────────────────────
 // UTILS
 // ──────────────────────────────────────────
-async function apiFetch(endpoint, method = 'GET', body = null) {
+async function apiFetch(endpoint, method = 'GET', body = null, { retries, timeoutMs = 15000 } = {}) {
+  // Only retry GET requests — mutations could create duplicates
+  const maxRetries = retries ?? (method === 'GET' ? 3 : 0);
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json' }
   };
   if (token) opts.headers['Authorization'] = `Bearer ${token}`;
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${API}${endpoint}`, opts);
-  const data = await res.json();
-  if (!res.ok) {
-    const error = new Error(data.error || 'Error del servidor');
-    error.code = data.code;
-    throw error;
+
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    opts.signal = controller.signal;
+
+    try {
+      const res = await fetch(`${API}${endpoint}`, opts);
+      clearTimeout(timer);
+      const data = await res.json();
+      if (!res.ok) {
+        const error = new Error(data.error || 'Error del servidor');
+        error.code = data.code;
+        throw error;
+      }
+      return data;
+    } catch (err) {
+      clearTimeout(timer);
+      // Only retry on network errors (TypeError / AbortError), not HTTP errors
+      if (err.code) throw err; // HTTP-level error, don't retry
+      lastError = err;
+      if (attempt < maxRetries) {
+        // Exponential backoff: 500ms, 1s, 2s
+        await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+      }
+    }
   }
-  return data;
+  throw lastError || new Error('Error de conexión');
 }
 
 function showToast(msg, isError = false) {

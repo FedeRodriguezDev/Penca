@@ -45,7 +45,7 @@ function getLogoBlock() {
   return `<div style="border:1px dashed ${BRAND.colors.muted};border-radius:10px;padding:10px 14px;color:${BRAND.colors.muted};font-size:12px;text-align:center;">Espacio para logo de ${escapeHtml(BRAND.name)}</div>`;
 }
 
-function renderLayout({ preheader, title, intro, bodyHtml, ctaLabel, ctaUrl, footerReason, headerBackground }) {
+function renderLayout({ preheader, title, intro, bodyHtml, ctaLabel, ctaUrl, footerReason, headerBackground, unsubscribeUrl }) {
   const safePreheader = escapeHtml(preheader);
   const safeTitle = escapeHtml(title);
   const safeIntro = escapeHtml(intro);
@@ -93,7 +93,7 @@ function renderLayout({ preheader, title, intro, bodyHtml, ctaLabel, ctaUrl, foo
             <tr>
               <td style="padding:16px 24px 24px 24px;border-top:1px solid #1E3A60;color:${BRAND.colors.muted};font-size:12px;line-height:1.5;">
                 Recibiste este correo porque ${safeFooterReason}.<br>
-                Si tenes dudas, respondé este email y te ayudamos.
+                Si tenes dudas, respondé este email y te ayudamos.${unsubscribeUrl ? `<br><a href="${escapeHtml(unsubscribeUrl)}" style="color:${BRAND.colors.muted};">Darme de baja de estas notificaciones</a>` : ''}
               </td>
             </tr>
           </table>
@@ -178,7 +178,7 @@ function buildPasswordResetEmail({ username, resetUrl }) {
   return { subject, preheader, html, text };
 }
 
-function buildReminderEmail({ username, match, leadMinutes, appUrl }) {
+function buildReminderEmail({ username, match, leadMinutes, appUrl, unsubscribeUrl }) {
   const subject = `Recordatorio: ${match.home_team} vs ${match.away_team}`;
   const preheader = 'Tu pronóstico todavía no está cargado.';
   const title = 'Te queda poco para pronosticar';
@@ -205,6 +205,7 @@ function buildReminderEmail({ username, match, leadMinutes, appUrl }) {
     ctaLabel: 'Cargar pronóstico',
     ctaUrl: appUrl,
     footerReason: 'activaste recordatorios de partidos en Penca Infoclub',
+    unsubscribeUrl,
   });
 
   const text = [
@@ -216,13 +217,14 @@ function buildReminderEmail({ username, match, leadMinutes, appUrl }) {
     'Cargá tu pronóstico acá:',
     appUrl,
     '',
+    ...(unsubscribeUrl ? ['Para darte de baja de estas notificaciones:', unsubscribeUrl, ''] : []),
     'Penca Infoclub - Infoclub Soluciones',
   ].join('\n');
 
   return { subject, preheader, html, text };
 }
 
-function buildResultEmail({ username, prediction }) {
+function buildResultEmail({ username, prediction, unsubscribeUrl }) {
   const matchLabel = `${prediction.home_team} ${prediction.real_home} - ${prediction.real_away} ${prediction.away_team}`;
   const subject = `Resultado de tu pronóstico: ${prediction.home_team} vs ${prediction.away_team}`;
   const preheader = `Terminó ${prediction.home_team} vs ${prediction.away_team}.`;
@@ -256,6 +258,7 @@ function buildResultEmail({ username, prediction }) {
     ctaLabel: 'Ver tabla de posiciones',
     ctaUrl: BRAND.siteUrl,
     footerReason: 'tenes activadas notificaciones de resultados en Penca Infoclub',
+    unsubscribeUrl,
   });
 
   const text = [
@@ -268,6 +271,7 @@ function buildResultEmail({ username, prediction }) {
     '',
     `Ver tabla: ${BRAND.siteUrl}`,
     '',
+    ...(unsubscribeUrl ? ['Para darte de baja de estas notificaciones:', unsubscribeUrl, ''] : []),
     'Penca Infoclub - Infoclub Soluciones',
   ].join('\n');
 
@@ -304,10 +308,41 @@ function buildVerificationResultPage({ success, message }) {
 </html>`;
 }
 
+function buildUnsubscribeResultPage({ success, message }) {
+  const safeMessage = escapeHtml(message);
+  return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${success ? 'Baja de notificaciones' : 'No se pudo procesar la solicitud'}</title>
+    <style>
+      body { margin:0; padding:0; font-family:Lato,Arial,sans-serif; background:#0D1E33; color:#E8F0FF; }
+      .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+      .card { width:100%; max-width:520px; border:1px solid #1E3A60; background:#132D52; border-radius:14px; padding:28px; }
+      .title { margin:0 0 12px; color:${success ? '#4a9de0' : '#E53935'}; font-size:28px; }
+      .msg { margin:0 0 20px; color:#C8DAF0; line-height:1.5; }
+      .link { display:inline-block; background:#E53935; color:#fff; text-decoration:none; padding:12px 16px; border-radius:10px; font-weight:700; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <img src="${escapeHtml(BRAND.logoUrl)}" alt="${escapeHtml(BRAND.name)}" style="display:block;max-width:160px;width:100%;height:auto;margin-bottom:18px;">
+        <h1 class="title">${success ? 'Baja exitosa' : 'Error al procesar'}</h1>
+        <p class="msg">${safeMessage}</p>
+        <a class="link" href="${escapeHtml(BRAND.siteUrl)}">Ir a Penca Infoclub</a>
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
 module.exports = {
   buildPasswordResetEmail,
   buildReminderEmail,
   buildResultEmail,
+  buildUnsubscribeResultPage,
   buildVerificationEmail,
   buildVerificationResultPage,
 };

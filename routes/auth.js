@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const { db } = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
 const { sendPasswordResetEmail, sendVerificationEmail } = require('../services/emailNotifications');
-const { buildVerificationResultPage } = require('../services/emailTemplates');
+const { buildVerificationResultPage, buildUnsubscribeResultPage } = require('../services/emailTemplates');
 
 const router = express.Router();
 
@@ -290,6 +290,45 @@ router.post('/reset-password', async (req, res) => {
   } catch (err) {
     console.error('Reset password error:', err);
     return res.status(500).json({ error: 'No se pudo restablecer la contraseña' });
+  }
+});
+
+// GET /api/auth/unsubscribe?token=...
+router.get('/unsubscribe', async (req, res) => {
+  try {
+    const token = String(req.query.token || '').trim();
+    if (!token) {
+      return res.status(400).send(buildUnsubscribeResultPage({
+        success: false,
+        message: 'Falta el token de baja.',
+      }));
+    }
+
+    const user = await db.prepare('SELECT id FROM users WHERE unsubscribe_token = $1').get(token);
+    if (!user) {
+      return res.status(400).send(buildUnsubscribeResultPage({
+        success: false,
+        message: 'El enlace de baja no es válido.',
+      }));
+    }
+
+    await db.prepare(`
+      UPDATE users
+      SET notify_match_reminders = false,
+          notify_prediction_results = false
+      WHERE id = $1
+    `).run(user.id);
+
+    return res.send(buildUnsubscribeResultPage({
+      success: true,
+      message: 'Te diste de baja correctamente. Ya no recibirás recordatorios ni notificaciones de resultados. Podés volver a activarlas desde tu perfil en la plataforma.',
+    }));
+  } catch (err) {
+    console.error('Unsubscribe error:', err);
+    return res.status(500).send(buildUnsubscribeResultPage({
+      success: false,
+      message: 'No se pudo procesar la baja. Intentá nuevamente en unos minutos.',
+    }));
   }
 });
 

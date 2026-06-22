@@ -93,6 +93,7 @@ async function initializeDatabase() {
         email_verification_sent_at TIMESTAMP,
         notify_match_reminders BOOLEAN DEFAULT TRUE,
         notify_prediction_results BOOLEAN DEFAULT TRUE,
+        unsubscribe_token TEXT UNIQUE,
         is_admin INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -160,6 +161,7 @@ async function initializeDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_sent_at TIMESTAMP`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_match_reminders BOOLEAN DEFAULT TRUE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_prediction_results BOOLEAN DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS unsubscribe_token TEXT`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number TEXT`);
     await pool.query(`
       DO $$

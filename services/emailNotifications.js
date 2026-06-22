@@ -26,6 +26,15 @@ function getPasswordResetExpiryDate() {
   return new Date(Date.now() + PASSWORD_RESET_TTL_HOURS * 60 * 60 * 1000);
 }
 
+async function getOrCreateUnsubscribeToken(userId) {
+  const row = await db.prepare('SELECT unsubscribe_token FROM users WHERE id = $1').get(userId);
+  if (row?.unsubscribe_token) return row.unsubscribe_token;
+
+  const token = crypto.randomBytes(32).toString('hex');
+  await db.prepare('UPDATE users SET unsubscribe_token = $1 WHERE id = $2').run(token, userId);
+  return token;
+}
+
 async function sendVerificationEmail({ userId, username, email }) {
   const token = createVerificationToken();
   const expiresAt = getVerificationExpiryDate().toISOString();
@@ -110,11 +119,14 @@ async function sendReminderNotifications() {
 
   for (const row of pending) {
     try {
+      const unsubscribeToken = await getOrCreateUnsubscribeToken(row.user_id);
+      const unsubscribeUrl = `${APP_BASE_URL}/api/auth/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
       const content = buildReminderEmail({
         username: row.username,
         match: row,
         leadMinutes: EMAIL_REMINDER_LEAD_MINUTES,
         appUrl: APP_BASE_URL,
+        unsubscribeUrl,
       });
 
       const result = await sendEmail({
@@ -175,7 +187,9 @@ async function sendResultNotifications() {
 
   for (const row of rows) {
     try {
-      const content = buildResultEmail({ username: row.username, prediction: row });
+      const unsubscribeToken = await getOrCreateUnsubscribeToken(row.user_id);
+      const unsubscribeUrl = `${APP_BASE_URL}/api/auth/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
+      const content = buildResultEmail({ username: row.username, prediction: row, unsubscribeUrl });
       const result = await sendEmail({
         to: row.email,
         subject: content.subject,

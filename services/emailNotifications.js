@@ -3,6 +3,7 @@ const { db } = require('../db/database');
 const { sendEmail } = require('./emailService');
 const {
   buildPasswordResetEmail,
+  buildPhaseReadyEmail,
   buildReminderEmail,
   buildResultEmail,
   buildVerificationEmail,
@@ -215,14 +216,92 @@ async function sendResultNotifications() {
   return sent;
 }
 
+// ──────────────────────────────────────────
+// Phase-ready notifications
+// ──────────────────────────────────────────
+const PHASE_STAGES = ['Ronda de 32', 'Octavos de Final', 'Cuartos de Final', 'Semifinal', 'Tercer Puesto', 'Final'];
+
+function isTeamTbd(teamName) {
+  if (!teamName || !String(teamName).trim()) return true;
+  const normalized = String(teamName).trim().toUpperCase();
+  return ['TBD', 'TBC', 'TBA', 'UNKNOWN', 'TO BE DETERMINED', 'TO BE CONFIRMED', 'TO BE ANNOUNCED', 'N/A', '-', '--', 'A DETERMINAR'].includes(normalized);
+}
+
+async function sendPhaseReadyNotifications() {
+  const alreadyNotified = new Set();
+  const metaRows = await db.prepare("SELECT key FROM app_metadata WHERE key LIKE 'phase_ready_notified_%'").all();
+  for (const row of metaRows) {
+    alreadyNotified.add(row.key.replace('phase_ready_notified_', ''));
+  }
+
+  let sent = 0;
+
+  for (const stage of PHASE_STAGES) {
+    if (alreadyNotified.has(stage)) continue;
+
+    // Get all matches for this stage
+    const matches = await db.prepare('SELECT * FROM matches WHERE stage = $1 ORDER BY match_number ASC').all(stage);
+    if (matches.length === 0) continue;
+
+    // Check if all matches have real teams (not TBD)
+    const allReady = matches.every(m => !isTeamTbd(m.home_team) && !isTeamTbd(m.away_team));
+    if (!allReady) continue;
+
+    // Phase is ready! Get users with notifications enabled
+    const users = await db.prepare(`
+      SELECT id, username, email FROM users
+      WHERE COALESCE(email_verified, false) = true
+        AND COALESCE(notify_prediction_results, true) = true
+    `).all();
+
+    for (const user of users) {
+      try {
+        const unsubscribeToken = await getOrCreateUnsubscribeToken(user.id);
+        const unsubscribeUrl = `${APP_BASE_URL}/api/auth/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
+        const content = buildPhaseReadyEmail({
+          username: user.username,
+          stage,
+          matchCount: matches.length,
+          appUrl: APP_BASE_URL,
+          unsubscribeUrl,
+        });
+
+        const result = await sendEmail({
+          to: user.email,
+          subject: content.subject,
+          html: content.html,
+          text: content.text,
+          headers: { 'X-Email-Type': 'phase-ready' },
+        });
+
+        if (!result.skipped) sent++;
+      } catch (error) {
+        console.error('[email] Error enviando notificación de fase lista:', error.message);
+      }
+    }
+
+    // Mark phase as notified so we never send it again
+    await db.prepare(`
+      INSERT INTO app_metadata (key, value, updated_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `).run(`phase_ready_notified_${stage}`, new Date().toISOString());
+
+    console.log(`[email] Fase "${stage}" notificada a ${users.length} usuario(s), ${sent} email(s) enviado(s)`);
+  }
+
+  return sent;
+}
+
 async function runEmailNotificationCycle() {
-  const [remindersSent, resultsSent] = await Promise.all([
+  const [remindersSent, resultsSent, phasesSent] = await Promise.all([
     sendReminderNotifications(),
     sendResultNotifications(),
+    sendPhaseReadyNotifications(),
   ]);
 
-  if (remindersSent || resultsSent) {
-    console.log(`[email] Notificaciones enviadas: recordatorios=${remindersSent}, resultados=${resultsSent}`);
+  if (remindersSent || resultsSent || phasesSent) {
+    console.log(`[email] Notificaciones enviadas: recordatorios=${remindersSent}, resultados=${resultsSent}, fases=${phasesSent}`);
   }
 }
 

@@ -272,10 +272,88 @@ async function initializeDatabase() {
       }
       console.log('✅ Partidos cargados correctamente');
     }
+
+    // Seed knockout placeholder matches if they don't exist yet.
+    await ensureKnockoutPlaceholders();
   } catch (err) {
     console.error('❌ Error inicializando database:', err);
     throw err;
   }
+}
+
+// ──────────────────────────────────────────
+// Knockout placeholder matches
+// ──────────────────────────────────────────
+// TheSportsDB does not return knockout-stage events via bulk API endpoints
+// (events have no strRound assigned).  We pre-seed them with official FIFA
+// dates and "A determinar" teams so the phases appear in the frontend.
+// When TheSportsDB eventually publishes them, the sync updates teams & details
+// by matching external_event_id.
+const KNOCKOUT_PLACEHOLDERS = [
+  // Ronda de 32 (matches 73-88): June 28 – July 3
+  // Matches with confirmed teams (from TheSportsDB as of June 27).
+  { num: 73,  stage: 'Ronda de 32',       date: '2026-06-28', time: '19:00', home: 'Sudáfrica',       away: 'Canadá',               extId: '2499618' },
+  { num: 74,  stage: 'Ronda de 32',       date: '2026-06-29', time: '17:00', home: 'Brasil',          away: 'Japón',                extId: '2499835' },
+  { num: 75,  stage: 'Ronda de 32',       date: '2026-06-29', time: '20:30', home: 'Alemania',        away: 'Paraguay',             extId: '2502846' },
+  { num: 76,  stage: 'Ronda de 32',       date: '2026-06-30', time: '01:00', home: 'Países Bajos',    away: 'Marruecos',            extId: '2499836' },
+  { num: 77,  stage: 'Ronda de 32',       date: '2026-06-30', time: '17:00', home: 'Costa de Marfil', away: 'Noruega',              extId: '2502605' },
+  { num: 78,  stage: 'Ronda de 32',       date: '2026-06-30', time: '21:00', home: 'Francia',         away: 'Suecia',               extId: '2502847' },
+  { num: 79,  stage: 'Ronda de 32',       date: '2026-07-02', time: '00:00', home: 'Estados Unidos',  away: 'Bosnia y Herzegovina', extId: '2499837' },
+  // Still TBD — will be updated by sync when TheSportsDB publishes teams.
+  { num: 80,  stage: 'Ronda de 32',       date: '2026-06-30', time: '20:00' },
+  { num: 81,  stage: 'Ronda de 32',       date: '2026-07-01', time: '15:00' },
+  { num: 82,  stage: 'Ronda de 32',       date: '2026-07-01', time: '17:00' },
+  { num: 83,  stage: 'Ronda de 32',       date: '2026-07-01', time: '20:00' },
+  { num: 84,  stage: 'Ronda de 32',       date: '2026-07-02', time: '15:00' },
+  { num: 85,  stage: 'Ronda de 32',       date: '2026-07-02', time: '17:00' },
+  { num: 86,  stage: 'Ronda de 32',       date: '2026-07-02', time: '20:00' },
+  { num: 87,  stage: 'Ronda de 32',       date: '2026-07-03', time: '15:00' },
+  { num: 88,  stage: 'Ronda de 32',       date: '2026-07-03', time: '19:00' },
+  // Octavos de Final (matches 89-96): July 4-8
+  { num: 89,  stage: 'Octavos de Final',  date: '2026-07-04', time: '15:00' },
+  { num: 90,  stage: 'Octavos de Final',  date: '2026-07-04', time: '19:00' },
+  { num: 91,  stage: 'Octavos de Final',  date: '2026-07-05', time: '15:00' },
+  { num: 92,  stage: 'Octavos de Final',  date: '2026-07-05', time: '19:00' },
+  { num: 93,  stage: 'Octavos de Final',  date: '2026-07-06', time: '15:00' },
+  { num: 94,  stage: 'Octavos de Final',  date: '2026-07-06', time: '19:00' },
+  { num: 95,  stage: 'Octavos de Final',  date: '2026-07-07', time: '15:00' },
+  { num: 96,  stage: 'Octavos de Final',  date: '2026-07-07', time: '19:00' },
+  // Cuartos de Final (matches 97-100): July 9-12
+  { num: 97,  stage: 'Cuartos de Final',  date: '2026-07-09', time: '16:00' },
+  { num: 98,  stage: 'Cuartos de Final',  date: '2026-07-10', time: '16:00' },
+  { num: 99,  stage: 'Cuartos de Final',  date: '2026-07-11', time: '16:00' },
+  { num: 100, stage: 'Cuartos de Final',  date: '2026-07-11', time: '20:00' },
+  // Semifinal (matches 101-102): July 14-15
+  { num: 101, stage: 'Semifinal',         date: '2026-07-14', time: '20:00' },
+  { num: 102, stage: 'Semifinal',         date: '2026-07-15', time: '20:00' },
+  // Tercer Puesto (match 103): July 18
+  { num: 103, stage: 'Tercer Puesto',     date: '2026-07-18', time: '16:00' },
+  // Final (match 104): July 19
+  { num: 104, stage: 'Final',             date: '2026-07-19', time: '16:00' },
+];
+
+async function ensureKnockoutPlaceholders() {
+  const existingCount = await pool.query(
+    'SELECT COUNT(*) AS cnt FROM matches WHERE match_number >= 73'
+  );
+  if (parseInt(existingCount.rows[0].cnt) > 0) {
+    console.log('ℹ️  Partidos de eliminatoria ya existen, omitiendo placeholders');
+    return;
+  }
+
+  console.log('📥 Sembrando placeholders de eliminatoria (32 partidos)...');
+  for (const m of KNOCKOUT_PLACEHOLDERS) {
+    const kickoffAt = buildKickoffAtFromLocal(m.date, m.time);
+    const home = m.home || 'A determinar';
+    const away = m.away || 'A determinar';
+    await pool.query(
+      `INSERT INTO matches (match_number, stage, home_team, away_team, match_date, match_time, kickoff_at, venue, city, external_event_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (match_number) DO NOTHING`,
+      [m.num, m.stage, home, away, m.date, m.time, kickoffAt, '', '', m.extId || null]
+    );
+  }
+  console.log('✅ Placeholders de eliminatoria cargados');
 }
 
 // Inicializar

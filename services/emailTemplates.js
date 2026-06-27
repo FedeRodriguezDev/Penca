@@ -278,6 +278,54 @@ function buildResultEmail({ username, prediction, unsubscribeUrl }) {
   return { subject, preheader, html, text };
 }
 
+function buildPhaseReadyEmail({ username, stage, matchCount, appUrl, unsubscribeUrl }) {
+  const subject = `¡Nuevos partidos disponibles: ${stage}!`;
+  const preheader = `Ya están cargados los ${matchCount} partidos de ${stage}.`;
+  const title = `¡${stage} disponible!`;
+  const intro = `Hola ${username}, ya están definidos todos los equipos de la ${stage} del Mundial 2026.`;
+
+  const bodyHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0A1F3A;border:1px solid #1E3A60;border-radius:10px;margin:0 0 12px 0;">
+      <tr>
+        <td style="padding:14px 16px;color:${BRAND.colors.text};font-size:15px;line-height:1.5;">
+          <strong style="display:block;color:#ffffff;font-size:18px;">${escapeHtml(stage)}</strong>
+          <span style="display:block;color:${BRAND.colors.muted};margin-top:4px;">${matchCount} partidos cargados — ¡a pronosticar!</span>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0 0 12px 0;">Entrá ahora para cargar tus pronósticos antes de que empiecen los partidos. Acordate que podés sumar 3 puntos por marcador exacto y 1 punto por acertar el resultado.</p>
+    <p style="margin:0;">¡No te quedes afuera de esta fase!</p>
+  `;
+
+  const html = renderLayout({
+    preheader,
+    title,
+    intro,
+    bodyHtml,
+    ctaLabel: 'Cargar pronósticos',
+    ctaUrl: appUrl,
+    footerReason: 'tenes activadas notificaciones de la Penca Infoclub',
+    unsubscribeUrl,
+  });
+
+  const text = [
+    `Hola ${username},`,
+    '',
+    `¡Ya están disponibles los ${matchCount} partidos de ${stage} del Mundial 2026!`,
+    '',
+    'Entrá a la Penca para cargar tus pronósticos:',
+    appUrl,
+    '',
+    'Sumás 3 puntos por marcador exacto y 1 punto por acertar el resultado.',
+    '¡No te quedes afuera!',
+    '',
+    ...(unsubscribeUrl ? ['Para darte de baja:', unsubscribeUrl, ''] : []),
+    'Penca Infoclub - Infoclub Soluciones',
+  ].join('\n');
+
+  return { subject, preheader, html, text };
+}
+
 function buildVerificationResultPage({ success, message }) {
   const safeMessage = escapeHtml(message);
   return `<!doctype html>
@@ -340,6 +388,7 @@ function buildUnsubscribeResultPage({ success, message }) {
 
 module.exports = {
   buildPasswordResetEmail,
+  buildPhaseReadyEmail,
   buildReminderEmail,
   buildResultEmail,
   buildUnsubscribeResultPage,

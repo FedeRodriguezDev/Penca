@@ -14,6 +14,17 @@ const WORLD_CUP_SEASON = process.env.THESPORTSDB_WORLD_CUP_SEASON || '2026';
 const THESPORTSDB_LOG_LEVEL = (process.env.THESPORTSDB_LOG_LEVEL || 'basic').toLowerCase();
 const MAX_WORLD_CUP_ROUNDS = 10;
 
+// Knockout event discovery via ID scanning.
+// TheSportsDB API does not return knockout-stage events via eventsround.php
+// (they have no strRound assigned), but they exist and can be fetched individually
+// via lookupevent.php.  We scan a reasonable ID range in parallel batches,
+// incrementally — starting from the last scanned ID stored in app_metadata.
+const KNOCKOUT_ID_SCAN_BATCH = 30;
+// How many IDs to scan ahead per daily sync (keeps each run fast).
+const KNOCKOUT_ID_SCAN_WINDOW = 3000;
+// Stop scanning after this many consecutive empty batches.
+const KNOCKOUT_ID_SCAN_EMPTY_LIMIT = 5;
+
 function readIntervalMs(envName, fallbackMs) {
   const value = Number(process.env[envName]);
   return Number.isFinite(value) && value > 0 ? value : fallbackMs;
@@ -230,7 +241,7 @@ async function clearPointsForMatch(matchId) {
   return predictions.length;
 }
 
-async function fetchWorldCupEvents() {
+async function fetchWorldCupEvents({ skipKnockoutScan = false } = {}) {
   const collectedEvents = [];
   let emptyRoundsInARow = 0;
 
@@ -282,12 +293,113 @@ async function fetchWorldCupEvents() {
     collectedEvents.push(...roundEvents);
   }
 
+  // Discover knockout-stage events that TheSportsDB doesn't return via round queries.
+  // These events have no strRound value and exist only via individual lookup.
+  // Only run during full fixture syncs (not lightweight result-refresh).
+  if (!skipKnockoutScan) {
+    const existingIds = new Set(collectedEvents.map((event) => String(event.idEvent)));
+    const knockoutEvents = await discoverKnockoutEvents(existingIds);
+    if (knockoutEvents.length) {
+      logTheSportsDb('Knockout events descubiertos via ID scan', {
+        count: knockoutEvents.length,
+        first: knockoutEvents[0] ? `${knockoutEvents[0].strEvent} (${knockoutEvents[0].dateEvent})` : null,
+        last: knockoutEvents.at(-1) ? `${knockoutEvents.at(-1).strEvent} (${knockoutEvents.at(-1).dateEvent})` : null,
+      });
+      collectedEvents.push(...knockoutEvents);
+    }
+  }
+
   if (!collectedEvents.length) {
     throw new Error('TheSportsDB no devolvió eventos para el Mundial');
   }
 
   return Array.from(new Map(collectedEvents.map((event) => [String(event.idEvent), event])).values())
     .sort(compareEvents);
+}
+
+async function discoverKnockoutEvents(existingIds) {
+  const discovered = [];
+  let emptyBatches = 0;
+
+  // Start from the last scanned ID (or fall back to the highest known event ID in DB).
+  const lastScanIdStr = await getMetadata('thesportsdb_last_knockout_scan_id');
+  let scanStart = lastScanIdStr ? Number(lastScanIdStr) + 1 : null;
+
+  if (!scanStart) {
+    // First run: start from the highest event ID we already know about.
+    const maxRow = await db.prepare(
+      'SELECT MAX(CAST(external_event_id AS INTEGER)) AS max_id FROM matches WHERE external_event_id IS NOT NULL AND external_event_id ~ $1'
+    ).get('^[0-9]+$');
+    const dbMax = maxRow?.max_id ? Number(maxRow.max_id) : 0;
+    // TheSportsDB assigns knockout-stage IDs well above group-stage IDs.
+    // Start scanning from the higher of (db max + 1) or a reasonable floor.
+    scanStart = Math.max(dbMax + 1, 2499600);
+  }
+
+  // Use a larger window on the first scan (when no previous progress exists),
+  // then a smaller window for incremental daily updates.
+  const isFirstScan = !lastScanIdStr;
+  const scanWindow = isFirstScan ? 80000 : KNOCKOUT_ID_SCAN_WINDOW;
+  const scanEnd = scanStart + scanWindow;
+
+  logTheSportsDb('Knockout ID scan iniciando', { scanStart, scanEnd }, 'debug');
+
+  for (let batchStart = scanStart; batchStart <= scanEnd; batchStart += KNOCKOUT_ID_SCAN_BATCH) {
+    const batchIds = [];
+    for (let id = batchStart; id < batchStart + KNOCKOUT_ID_SCAN_BATCH && id <= scanEnd; id++) {
+      if (!existingIds.has(String(id))) {
+        batchIds.push(id);
+      }
+    }
+
+    // Track the highest ID we attempted in this batch for progress saving.
+    const maxAttemptedId = batchStart + KNOCKOUT_ID_SCAN_BATCH - 1;
+
+    if (!batchIds.length) {
+      emptyBatches += 1;
+      if (emptyBatches >= KNOCKOUT_ID_SCAN_EMPTY_LIMIT) break;
+      continue;
+    }
+
+    const batchResults = await Promise.all(
+      batchIds.map((id) =>
+        fetch(`${THESPORTSDB_API_BASE}/${THESPORTSDB_API_KEY}/lookupevent.php?id=${id}`, {
+          headers: { Accept: 'application/json' },
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+      )
+    );
+
+    let batchFound = 0;
+    for (const result of batchResults) {
+      if (!result?.events?.[0]) continue;
+      const event = result.events[0];
+      if (String(event.idLeague) !== WORLD_CUP_LEAGUE_ID) continue;
+      if (existingIds.has(String(event.idEvent))) continue;
+      // Only collect knockout-stage events (from June 27 onwards)
+      if (!event.dateEvent || event.dateEvent < '2026-06-27') continue;
+
+      discovered.push(event);
+      existingIds.add(String(event.idEvent));
+      batchFound += 1;
+    }
+
+    // Save progress after each batch so interrupted scans can resume.
+    await setMetadata('thesportsdb_last_knockout_scan_id', String(maxAttemptedId));
+
+    if (batchFound === 0) {
+      emptyBatches += 1;
+      if (emptyBatches >= KNOCKOUT_ID_SCAN_EMPTY_LIMIT) break;
+    } else {
+      emptyBatches = 0;
+    }
+  }
+
+  // Save the final scan position.
+  await setMetadata('thesportsdb_last_knockout_scan_id', String(scanEnd));
+
+  return discovered;
 }
 
 async function isDailySyncDue(now = new Date()) {
@@ -359,7 +471,8 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
   await setMetadata('thesportsdb_last_source', source);
 
   try {
-    const remoteEvents = await fetchWorldCupEvents();
+    const skipKnockoutScan = syncReason === 'result-refresh';
+    const remoteEvents = await fetchWorldCupEvents({ skipKnockoutScan });
     const normalizedMatches = remoteEvents.map(normalizeRemoteMatch);
     logTheSportsDb('Eventos normalizados', {
       fetched: remoteEvents.length,

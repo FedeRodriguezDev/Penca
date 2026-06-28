@@ -359,36 +359,83 @@ async function ensureKnockoutPlaceholders() {
       continue;
     }
 
-    // Match already exists — patch teams and badges if the current values are still placeholder.
+    // Match already exists — only patch if it still has placeholder teams.
+    // Never overwrite a match that already has real teams, because users may
+    // have already placed predictions on it.
+    const current = await pool.query(
+      `SELECT home_team, away_team, external_event_id FROM matches WHERE match_number = $1`,
+      [m.num]
+    );
+    const row = current.rows[0];
+    if (!row) continue;
+
+    const isPlaceholder =
+      row.home_team === 'A determinar' && row.away_team === 'A determinar';
+
+    if (!isPlaceholder) {
+      // Slot occupied by a real match (from sync).  If this is a confirmed
+      // match from our seed data, try to place it in the next available
+      // "A determinar" slot so it still appears somewhere.
+      if (m.home && m.home !== 'A determinar' && m.extId) {
+        // Check this extId doesn't already live on another row.
+        const existingExt = await pool.query(
+          `SELECT match_number FROM matches WHERE external_event_id = $1 AND match_number != $2`,
+          [m.extId, m.num]
+        );
+        if (existingExt.rows.length > 0) {
+          // extId already assigned to a different slot — skip relocation.
+          continue;
+        }
+
+        // Find a free placeholder slot in the same stage
+        const freeSlot = await pool.query(
+          `SELECT match_number FROM matches
+           WHERE stage = $1 AND home_team = 'A determinar' AND away_team = 'A determinar'
+           ORDER BY match_number ASC LIMIT 1`,
+          [m.stage]
+        );
+        if (freeSlot.rows.length > 0) {
+          const newNum = freeSlot.rows[0].match_number;
+          const kickoffAt = buildKickoffAtFromLocal(m.date, m.time);
+          await pool.query(
+            `UPDATE matches SET home_team=$1, away_team=$2, home_flag=$3, away_flag=$4,
+              match_date=$5, match_time=$6, kickoff_at=$7, external_event_id=$8, stage=$9
+             WHERE match_number=$10`,
+            [m.home, m.away, m.badgeH||'', m.badgeA||'', m.date, m.time, kickoffAt, m.extId, m.stage, newNum]
+          );
+          patched++;
+          console.log(`  ↳ ${m.home} vs ${m.away} reubicado de #${m.num} a #${newNum}`);
+        }
+      }
+      continue;
+    }
+
+    // It's a pure placeholder — safe to update.
     const updates = [];
     const values = [];
     let p = 1;
 
-    // Only replace "A determinar" with real team names.
     if (m.home && m.home !== 'A determinar') {
-      updates.push(`home_team = COALESCE(NULLIF($${p}, ''), home_team)`);
+      updates.push(`home_team = $${p}`);
       values.push(m.home); p++;
     }
     if (m.away && m.away !== 'A determinar') {
-      updates.push(`away_team = COALESCE(NULLIF($${p}, ''), away_team)`);
+      updates.push(`away_team = $${p}`);
       values.push(m.away); p++;
     }
-    // Always set flags if we have them and the current flag is empty.
-    if (badgeH) {
-      updates.push(`home_flag = CASE WHEN home_flag = '' THEN $${p} ELSE home_flag END`);
-      values.push(badgeH); p++;
+    if (m.badgeH) {
+      updates.push(`home_flag = $${p}`);
+      values.push(m.badgeH); p++;
     }
-    if (badgeA) {
-      updates.push(`away_flag = CASE WHEN away_flag = '' THEN $${p} ELSE away_flag END`);
-      values.push(badgeA); p++;
+    if (m.badgeA) {
+      updates.push(`away_flag = $${p}`);
+      values.push(m.badgeA); p++;
     }
-    // Set external_event_id if missing.
     if (m.extId) {
-      updates.push(`external_event_id = COALESCE(external_event_id, $${p})`);
+      updates.push(`external_event_id = $${p}`);
       values.push(m.extId); p++;
     }
-    // Update stage if it's still the old placeholder value (just in case).
-    updates.push(`stage = COALESCE(NULLIF($${p}, ''), stage)`);
+    updates.push(`stage = $${p}`);
     values.push(m.stage); p++;
 
     if (updates.length > 0) {

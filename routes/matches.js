@@ -25,7 +25,7 @@ router.get('', authMiddleware, async (req, res) => {
         p.home_score AS pred_home, p.away_score AS pred_away, p.points AS pred_points
       FROM matches m
       LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = $1
-      ORDER BY m.match_number ASC
+      ORDER BY m.kickoff_at ASC NULLS LAST, m.match_number ASC
     `).all(req.user.id);
     
     const serialized = matches
@@ -56,7 +56,21 @@ router.get('/groups', authMiddleware, async (req, res) => {
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(serializeMatch(m));
     }
-    res.json(grouped);
+    // Sort groups: group stage first, then knockout stages in order
+    const stageOrder = ['Fase de Grupos', 'Ronda de 32', 'Octavos de Final', 'Cuartos de Final', 'Semifinal', 'Tercer Puesto', 'Final'];
+    const sorted = {};
+    for (const stage of stageOrder) {
+      for (const key of Object.keys(grouped)) {
+        if (key === stage || key.startsWith('Grupo ')) {
+          if (stage === 'Fase de Grupos' && key.startsWith('Grupo ')) {
+            sorted[key] = grouped[key];
+          } else if (key === stage) {
+            sorted[key] = grouped[key];
+          }
+        }
+      }
+    }
+    res.json(sorted);
   } catch (err) {
     console.error('Get matches grouped error:', err);
     res.status(500).json({ error: 'Error al obtener partidos agrupados' });

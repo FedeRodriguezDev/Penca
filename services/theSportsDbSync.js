@@ -503,7 +503,19 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
     let recalculatedPredictions = 0;
 
     for (const remoteMatch of normalizedMatches) {
-      const existingMatch = byExternalId.get(remoteMatch.external_event_id) || byMatchNumber.get(remoteMatch.match_number);
+      // Match by external_event_id first (most reliable).
+      // Only fall back to match_number if the existing slot doesn't already
+      // belong to a different event (protects placeholders from being overwritten).
+      let existingMatch = byExternalId.get(remoteMatch.external_event_id);
+      if (!existingMatch) {
+        const byNumber = byMatchNumber.get(remoteMatch.match_number);
+        // Use the match_number slot only if it's free or has no external_event_id
+        // (i.e. it's a placeholder still waiting for its real event).
+        if (byNumber && (!byNumber.external_event_id || byNumber.external_event_id === remoteMatch.external_event_id)) {
+          existingMatch = byNumber;
+        }
+      }
+
       if (existingMatch) {
         await db.prepare(`
           UPDATE matches
@@ -525,7 +537,7 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
               status = $16
           WHERE id = $17
         `).run(
-          remoteMatch.match_number,
+          existingMatch.match_number,
           remoteMatch.stage,
           remoteMatch.group_name,
           remoteMatch.home_team,
@@ -555,6 +567,14 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
         continue;
       }
 
+      // New event — find an available match_number slot, starting from the
+      // suggested one.  This prevents collisions with placeholders that already
+      // have a different external_event_id.
+      let insertNum = remoteMatch.match_number;
+      while (byMatchNumber.has(insertNum)) {
+        insertNum++;
+      }
+
       const insertedInfo = await db.prepare(`
         INSERT INTO matches (
           match_number, stage, group_name, home_team, away_team, home_flag, away_flag,
@@ -562,7 +582,7 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         RETURNING id
       `).get(
-        remoteMatch.match_number,
+        insertNum,
         remoteMatch.stage,
         remoteMatch.group_name,
         remoteMatch.home_team,
@@ -581,6 +601,8 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
       );
       inserted += 1;
       const insertedId = insertedInfo.id;
+      byExternalId.set(remoteMatch.external_event_id, { id: insertedId, match_number: insertNum, external_event_id: remoteMatch.external_event_id });
+      byMatchNumber.set(insertNum, { id: insertedId, match_number: insertNum, external_event_id: remoteMatch.external_event_id });
 
       if (remoteMatch.status === 'finished') {
         recalculatedPredictions += await recalculatePointsForMatch(insertedId, remoteMatch.home_score, remoteMatch.away_score);

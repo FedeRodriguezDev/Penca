@@ -338,6 +338,7 @@ async function ensureKnockoutPlaceholders() {
   let patched = 0;
 
   for (const m of KNOCKOUT_PLACEHOLDERS) {
+    try {
     const kickoffAt = buildKickoffAtFromLocal(m.date, m.time);
     const home = m.home || 'A determinar';
     const away = m.away || 'A determinar';
@@ -445,6 +446,14 @@ async function ensureKnockoutPlaceholders() {
         values
       );
       patched++;
+    }
+    } catch (err) {
+      // Individual placeholder failure shouldn't crash the whole server.
+      if (err.code === '23505') {
+        console.warn(`  ⚠️  Placeholder #${m.num} omitido (conflicto de unique key)`);
+      } else {
+        console.error(`  ❌ Error en placeholder #${m.num}:`, err.message);
+      }
     }
   }
 

@@ -449,6 +449,72 @@ async function getScheduledSyncReason(now = new Date()) {
   return null;
 }
 
+// Fetch individual knockout events by their known external_event_id to refresh
+// scores and status.  The round-based API doesn't include knockout matches.
+async function refreshKnockoutResults() {
+  const knockoutMatches = await db.prepare(`
+    SELECT id, match_number, external_event_id, home_score, away_score, status
+    FROM matches
+    WHERE match_number >= 73 AND external_event_id IS NOT NULL
+  `).all();
+
+  if (!knockoutMatches.length) return null;
+
+  // Fetch all known knockout events in parallel.
+  const results = await Promise.all(
+    knockoutMatches.map((m) =>
+      fetch(
+        `${THESPORTSDB_API_BASE}/${THESPORTSDB_API_KEY}/lookupevent.php?id=${m.external_event_id}`,
+        { headers: { Accept: 'application/json' } }
+      )
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+    )
+  );
+
+  let scoreUpdates = 0;
+  let statusUpdates = 0;
+
+  for (let i = 0; i < knockoutMatches.length; i++) {
+    const dbMatch = knockoutMatches[i];
+    const result = results[i];
+    if (!result?.events?.[0]) continue;
+    const ev = result.events[0];
+
+    const apiStatus = String(ev.strStatus || '').trim().toUpperCase();
+    let newStatus = dbMatch.status;
+    if (apiStatus === 'FT' || apiStatus === 'AET' || apiStatus === 'PEN' || apiStatus.includes('FINISHED')) {
+      newStatus = 'finished';
+    } else if (apiStatus && apiStatus !== 'NS' && apiStatus !== 'NOT STARTED') {
+      newStatus = 'live';
+    }
+
+    const homeScore = ev.intHomeScore != null && ev.intHomeScore !== '' ? parseInt(ev.intHomeScore, 10) : null;
+    const awayScore = ev.intAwayScore != null && ev.intAwayScore !== '' ? parseInt(ev.intAwayScore, 10) : null;
+
+    const scoreChanged =
+      (homeScore != null && homeScore !== dbMatch.home_score) ||
+      (awayScore != null && awayScore !== dbMatch.away_score);
+    const statusChanged = newStatus !== dbMatch.status;
+
+    if (scoreChanged || statusChanged) {
+      await db.prepare(`
+        UPDATE matches SET home_score = $1, away_score = $2, status = $3
+        WHERE id = $4
+      `).run(homeScore ?? dbMatch.home_score, awayScore ?? dbMatch.away_score, newStatus, dbMatch.id);
+
+      if (newStatus === 'finished' && (homeScore != null && awayScore != null)) {
+        scoreUpdates += await recalculatePointsForMatch(dbMatch.id, homeScore, awayScore);
+      } else if (scoreChanged && newStatus !== 'finished') {
+        await clearPointsForMatch(dbMatch.id);
+      }
+      statusUpdates++;
+    }
+  }
+
+  return scoreUpdates || statusUpdates ? { matches: knockoutMatches.length, scoreUpdates, statusUpdates } : null;
+}
+
 async function syncWorldCupMatches({ force = false, source = 'manual', reason = null } = {}) {
   const startedAt = new Date();
   const syncReason = force ? 'forced' : (reason || (await getScheduledSyncReason(startedAt)));
@@ -488,6 +554,13 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
         ? `${normalizedMatches.at(-1).match_number} ${normalizedMatches.at(-1).home_team} vs ${normalizedMatches.at(-1).away_team}`
         : null,
     }, 'debug');
+
+    // Refresh results for knockout matches that already have an external_event_id.
+    // The round-based API doesn't include them, so we fetch them individually.
+    const refreshedKnockout = await refreshKnockoutResults();
+    if (refreshedKnockout) {
+      logTheSportsDb('Knockout results refrescados', refreshedKnockout);
+    }
 
     const existingMatches = await db.prepare(`
       SELECT id, match_number, external_event_id, home_score, away_score, status

@@ -331,9 +331,14 @@ async function discoverKnockoutEvents(existingIds) {
       'SELECT MAX(CAST(external_event_id AS INTEGER)) AS max_id FROM matches WHERE external_event_id IS NOT NULL AND external_event_id ~ $1'
     ).get('^[0-9]+$');
     const dbMax = maxRow?.max_id ? Number(maxRow.max_id) : 0;
-    // TheSportsDB assigns knockout-stage IDs well above group-stage IDs.
-    // Start scanning from the higher of (db max + 1) or a reasonable floor.
     scanStart = Math.max(dbMax + 1, 2499600);
+  }
+
+  // Jump past the known empty gap between group-stage IDs (~246xxxx) and
+  // knockout IDs (~2499xxx).  This prevents wasting daily scans on empty space.
+  if (scanStart < 2499600) {
+    logTheSportsDb('Knockout ID scan saltando gap', { from: scanStart, to: 2499600 }, 'basic');
+    scanStart = 2499600;
   }
 
   // Use a larger window on the first scan (when no previous progress exists),

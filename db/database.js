@@ -333,27 +333,79 @@ const KNOCKOUT_PLACEHOLDERS = [
 ];
 
 async function ensureKnockoutPlaceholders() {
-  const existingCount = await pool.query(
-    'SELECT COUNT(*) AS cnt FROM matches WHERE match_number >= 73'
-  );
-  if (parseInt(existingCount.rows[0].cnt) > 0) {
-    console.log('ℹ️  Partidos de eliminatoria ya existen, omitiendo placeholders');
-    return;
-  }
+  console.log('🔧 Verificando partidos de eliminatoria...');
+  let created = 0;
+  let patched = 0;
 
-  console.log('📥 Sembrando placeholders de eliminatoria (32 partidos)...');
   for (const m of KNOCKOUT_PLACEHOLDERS) {
     const kickoffAt = buildKickoffAtFromLocal(m.date, m.time);
     const home = m.home || 'A determinar';
     const away = m.away || 'A determinar';
-    await pool.query(
-      `INSERT INTO matches (match_number, stage, home_team, away_team, home_flag, away_flag, match_date, match_time, kickoff_at, venue, city, external_event_id)
+    const badgeH = m.badgeH || '';
+    const badgeA = m.badgeA || '';
+
+    // Try insert; if it already exists, patch missing fields.
+    const result = await pool.query(
+      `INSERT INTO matches (match_number, stage, home_team, away_team, home_flag, away_flag,
+         match_date, match_time, kickoff_at, venue, city, external_event_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       ON CONFLICT (match_number) DO NOTHING`,
-      [m.num, m.stage, home, away, m.badgeH || '', m.badgeA || '', m.date, m.time, kickoffAt, '', '', m.extId || null]
+       ON CONFLICT (match_number) DO NOTHING
+       RETURNING id`,
+      [m.num, m.stage, home, away, badgeH, badgeA, m.date, m.time, kickoffAt, '', '', m.extId || null]
     );
+
+    if (result.rows.length > 0) {
+      created++;
+      continue;
+    }
+
+    // Match already exists — patch teams and badges if the current values are still placeholder.
+    const updates = [];
+    const values = [];
+    let p = 1;
+
+    // Only replace "A determinar" with real team names.
+    if (m.home && m.home !== 'A determinar') {
+      updates.push(`home_team = COALESCE(NULLIF($${p}, ''), home_team)`);
+      values.push(m.home); p++;
+    }
+    if (m.away && m.away !== 'A determinar') {
+      updates.push(`away_team = COALESCE(NULLIF($${p}, ''), away_team)`);
+      values.push(m.away); p++;
+    }
+    // Always set flags if we have them and the current flag is empty.
+    if (badgeH) {
+      updates.push(`home_flag = CASE WHEN home_flag = '' THEN $${p} ELSE home_flag END`);
+      values.push(badgeH); p++;
+    }
+    if (badgeA) {
+      updates.push(`away_flag = CASE WHEN away_flag = '' THEN $${p} ELSE away_flag END`);
+      values.push(badgeA); p++;
+    }
+    // Set external_event_id if missing.
+    if (m.extId) {
+      updates.push(`external_event_id = COALESCE(external_event_id, $${p})`);
+      values.push(m.extId); p++;
+    }
+    // Update stage if it's still the old placeholder value (just in case).
+    updates.push(`stage = COALESCE(NULLIF($${p}, ''), stage)`);
+    values.push(m.stage); p++;
+
+    if (updates.length > 0) {
+      values.push(m.num);
+      await pool.query(
+        `UPDATE matches SET ${updates.join(', ')} WHERE match_number = $${p}`,
+        values
+      );
+      patched++;
+    }
   }
-  console.log('✅ Placeholders de eliminatoria cargados');
+
+  if (created || patched) {
+    console.log(`✅ Eliminatoria: ${created} nuevos, ${patched} actualizados`);
+  } else {
+    console.log('✅ Eliminatoria: todo al día');
+  }
 }
 
 // Inicializar

@@ -46,7 +46,7 @@ router.get('/groups', authMiddleware, async (req, res) => {
         p.home_score AS pred_home, p.away_score AS pred_away, p.points AS pred_points
       FROM matches m
       LEFT JOIN predictions p ON p.match_id = m.id AND p.user_id = $1
-      ORDER BY m.match_number ASC
+      ORDER BY m.kickoff_at ASC NULLS LAST, m.match_number ASC
     `).all(req.user.id);
 
     const grouped = {};

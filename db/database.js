@@ -351,6 +351,21 @@ const KNOCKOUT_PLACEHOLDERS = [
 
 async function ensureKnockoutPlaceholders() {
   console.log('🔧 Verificando partidos de eliminatoria...');
+
+  // One-time fix: correct kickoff_at for all knockout matches.
+  // The sync treated TheSportsDB times as UTC-3 but they're actually UTC,
+  // so kickoff_at was shifted +3h.  Rebuild it from match_date + match_time
+  // (which are in UTC as returned by TheSportsDB).
+  await pool.query(`
+    UPDATE matches
+    SET kickoff_at = (match_date || ' ' || match_time)::timestamp,
+        match_time = ((match_date || ' ' || match_time)::timestamp - interval '3 hours')::time::text
+    WHERE match_number >= 73
+      AND match_time IS NOT NULL
+      AND match_time != ''
+      AND home_team != 'A determinar'
+  `);
+
   let created = 0;
   let patched = 0;
 

@@ -352,20 +352,6 @@ const KNOCKOUT_PLACEHOLDERS = [
 async function ensureKnockoutPlaceholders() {
   console.log('🔧 Verificando partidos de eliminatoria...');
 
-  // One-time fix: correct kickoff_at for all knockout matches.
-  // The sync treated TheSportsDB times as UTC-3 but they're actually UTC,
-  // so kickoff_at was shifted +3h.  Rebuild it from match_date + match_time
-  // (which are in UTC as returned by TheSportsDB).
-  await pool.query(`
-    UPDATE matches
-    SET kickoff_at = (match_date || ' ' || match_time)::timestamp,
-        match_time = ((match_date || ' ' || match_time)::timestamp - interval '3 hours')::time::text
-    WHERE match_number >= 73
-      AND match_time IS NOT NULL
-      AND match_time != ''
-      AND home_team != 'A determinar'
-  `);
-
   let created = 0;
   let patched = 0;
 
@@ -408,14 +394,14 @@ async function ensureKnockoutPlaceholders() {
       row.home_team === 'A determinar' && row.away_team === 'A determinar';
 
     if (!isPlaceholder) {
-      // Slot occupied by a real match. If the external_event_id matches our
-      // confirmed data, it's the same match — just fix times and badges in place.
-      // Otherwise try to relocate to a free "A determinar" slot.
+      // Slot occupied.  If we have confirmed data for this match (matching by
+      // external_event_id OR by team names), fix times and badges in place.
       if (!m.home || m.home === 'A determinar' || !m.extId) continue;
 
-      const sameMatch = row.external_event_id === m.extId;
+      const sameExtId = row.external_event_id === m.extId;
+      const sameTeams = row.home_team === m.home && row.away_team === m.away;
 
-      if (sameMatch) {
+      if (sameExtId || sameTeams) {
         // Same match — update times (UTC→UTC-3) and badges.
         const kickoffAt = buildKickoffUtc(m.date, m.time);
         const display = utcToUtcMinus3(m.date, m.time);
@@ -435,7 +421,7 @@ async function ensureKnockoutPlaceholders() {
         continue;
       }
 
-      // Different match occupying our intended slot — try relocation.
+      // Different match at this slot — try relocation to a free placeholder.
       {
 
         // Find a free placeholder slot in the same stage

@@ -339,7 +339,10 @@ async function ensureKnockoutPlaceholders() {
 
   for (const m of KNOCKOUT_PLACEHOLDERS) {
     try {
-    const kickoffAt = buildKickoffAtFromLocal(m.date, m.time);
+    // Times are in UTC (matching TheSportsDB). Build kickoff_at directly.
+    const kickoffAt = m.date && m.time
+      ? `${m.date}T${m.time}:00Z`
+      : buildKickoffAtFromLocal(m.date, m.time);
     const home = m.home || 'A determinar';
     const away = m.away || 'A determinar';
     const badgeH = m.badgeH || '';
@@ -397,7 +400,9 @@ async function ensureKnockoutPlaceholders() {
         );
         if (freeSlot.rows.length > 0) {
           const newNum = freeSlot.rows[0].match_number;
-          const kickoffAt = buildKickoffAtFromLocal(m.date, m.time);
+          const kickoffAt = m.date && m.time
+            ? `${m.date}T${m.time}:00Z`
+            : buildKickoffAtFromLocal(m.date, m.time);
           await pool.query(
             `UPDATE matches SET home_team=$1, away_team=$2, home_flag=$3, away_flag=$4,
               match_date=$5, match_time=$6, kickoff_at=$7, external_event_id=$8, stage=$9

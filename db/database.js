@@ -286,9 +286,26 @@ async function initializeDatabase() {
 // ──────────────────────────────────────────
 // TheSportsDB does not return knockout-stage events via bulk API endpoints
 // (events have no strRound assigned).  We pre-seed them with official FIFA
-// dates and "A determinar" teams so the phases appear in the frontend.
+// dates and UTC times so the phases appear in the frontend.
 // When TheSportsDB eventually publishes them, the sync updates teams & details
 // by matching external_event_id.
+//
+// Times are in UTC.  match_time (display) is converted to UTC-3 on write.
+
+function utcToUtcMinus3(utcDateStr, utcTimeStr) {
+  if (!utcDateStr || !utcTimeStr) return { date: utcDateStr, time: utcTimeStr };
+  const d = new Date(`${utcDateStr}T${utcTimeStr}Z`);
+  if (isNaN(d.getTime())) return { date: utcDateStr, time: utcTimeStr };
+  return {
+    date: d.toLocaleDateString('en-CA', { timeZone: 'America/Montevideo' }),
+    time: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Montevideo' }),
+  };
+}
+
+function buildKickoffUtc(date, time) {
+  if (!date || !time) return null;
+  return `${date}T${time}:00Z`;
+}
 const KNOCKOUT_PLACEHOLDERS = [
   // Ronda de 32 (matches 73-88): June 28 – July 3
   // Matches with confirmed teams (from TheSportsDB as of June 27).
@@ -339,10 +356,9 @@ async function ensureKnockoutPlaceholders() {
 
   for (const m of KNOCKOUT_PLACEHOLDERS) {
     try {
-    // Times are in UTC (matching TheSportsDB). Build kickoff_at directly.
-    const kickoffAt = m.date && m.time
-      ? `${m.date}T${m.time}:00Z`
-      : buildKickoffAtFromLocal(m.date, m.time);
+    // Times are in UTC. Build kickoff_at as ISO UTC, match_time as UTC-3 display.
+    const kickoffAt = buildKickoffUtc(m.date, m.time);
+    const display = utcToUtcMinus3(m.date, m.time);
     const home = m.home || 'A determinar';
     const away = m.away || 'A determinar';
     const badgeH = m.badgeH || '';
@@ -355,7 +371,7 @@ async function ensureKnockoutPlaceholders() {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (match_number) DO NOTHING
        RETURNING id`,
-      [m.num, m.stage, home, away, badgeH, badgeA, m.date, m.time, kickoffAt, '', '', m.extId || null]
+      [m.num, m.stage, home, away, badgeH, badgeA, display.date, display.time, kickoffAt, '', '', m.extId || null]
     );
 
     if (result.rows.length > 0) {
@@ -377,19 +393,35 @@ async function ensureKnockoutPlaceholders() {
       row.home_team === 'A determinar' && row.away_team === 'A determinar';
 
     if (!isPlaceholder) {
-      // Slot occupied by a real match (from sync).  If this is a confirmed
-      // match from our seed data, try to place it in the next available
-      // "A determinar" slot so it still appears somewhere.
-      if (m.home && m.home !== 'A determinar' && m.extId) {
-        // Check this extId doesn't already live on another row.
-        const existingExt = await pool.query(
-          `SELECT match_number FROM matches WHERE external_event_id = $1 AND match_number != $2`,
-          [m.extId, m.num]
-        );
-        if (existingExt.rows.length > 0) {
-          // extId already assigned to a different slot — skip relocation.
-          continue;
+      // Slot occupied by a real match. If the external_event_id matches our
+      // confirmed data, it's the same match — just fix times and badges in place.
+      // Otherwise try to relocate to a free "A determinar" slot.
+      if (!m.home || m.home === 'A determinar' || !m.extId) continue;
+
+      const sameMatch = row.external_event_id === m.extId;
+
+      if (sameMatch) {
+        // Same match — update times (UTC→UTC-3) and badges.
+        const kickoffAt = buildKickoffUtc(m.date, m.time);
+        const display = utcToUtcMinus3(m.date, m.time);
+        const setClauses = [];
+        const vals = [];
+        let pi = 1;
+        if (kickoffAt) { setClauses.push(`kickoff_at = $${pi}`); vals.push(kickoffAt); pi++; }
+        if (display.date) { setClauses.push(`match_date = $${pi}`); vals.push(display.date); pi++; }
+        if (display.time) { setClauses.push(`match_time = $${pi}`); vals.push(display.time); pi++; }
+        if (m.badgeH) { setClauses.push(`home_flag = $${pi}`); vals.push(m.badgeH); pi++; }
+        if (m.badgeA) { setClauses.push(`away_flag = $${pi}`); vals.push(m.badgeA); pi++; }
+        if (setClauses.length > 0) {
+          vals.push(m.num);
+          await pool.query(`UPDATE matches SET ${setClauses.join(', ')} WHERE match_number = $${pi}`, vals);
+          patched++;
         }
+        continue;
+      }
+
+      // Different match occupying our intended slot — try relocation.
+      {
 
         // Find a free placeholder slot in the same stage
         const freeSlot = await pool.query(
@@ -400,14 +432,13 @@ async function ensureKnockoutPlaceholders() {
         );
         if (freeSlot.rows.length > 0) {
           const newNum = freeSlot.rows[0].match_number;
-          const kickoffAt = m.date && m.time
-            ? `${m.date}T${m.time}:00Z`
-            : buildKickoffAtFromLocal(m.date, m.time);
+          const kickoffAt = buildKickoffUtc(m.date, m.time);
+          const display = utcToUtcMinus3(m.date, m.time);
           await pool.query(
             `UPDATE matches SET home_team=$1, away_team=$2, home_flag=$3, away_flag=$4,
               match_date=$5, match_time=$6, kickoff_at=$7, external_event_id=$8, stage=$9
              WHERE match_number=$10`,
-            [m.home, m.away, m.badgeH||'', m.badgeA||'', m.date, m.time, kickoffAt, m.extId, m.stage, newNum]
+            [m.home, m.away, m.badgeH||'', m.badgeA||'', display.date, display.time, kickoffAt, m.extId, m.stage, newNum]
           );
           patched++;
           console.log(`  ↳ ${m.home} vs ${m.away} reubicado de #${m.num} a #${newNum}`);

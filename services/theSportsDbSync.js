@@ -465,6 +465,8 @@ async function refreshKnockoutResults() {
 
   if (!knockoutMatches.length) return null;
 
+  logTheSportsDb('Knockout refresh: consultando', { count: knockoutMatches.length });
+
   // Fetch all known knockout events in parallel.
   const results = await Promise.all(
     knockoutMatches.map((m) =>
@@ -472,7 +474,14 @@ async function refreshKnockoutResults() {
         `${THESPORTSDB_API_BASE}/${THESPORTSDB_API_KEY}/lookupevent.php?id=${m.external_event_id}`,
         { headers: { Accept: 'application/json' } }
       )
-        .then((r) => (r.ok ? r.json() : null))
+        .then(async (r) => {
+          if (!r.ok) return null;
+          const text = await r.text();
+          // TheSportsDB sometimes returns "error code: 1015" as plain text
+          // for non-existent events, even with HTTP 200.
+          if (!text || text.startsWith('error code:')) return null;
+          try { return JSON.parse(text); } catch { return null; }
+        })
         .catch(() => null)
     )
   );
@@ -502,12 +511,18 @@ async function refreshKnockoutResults() {
       (awayScore != null && awayScore !== dbMatch.away_score);
     const statusChanged = newStatus !== dbMatch.status;
 
-    // Always refresh metadata from TheSportsDB if the DB fields are empty.
-    const needsMeta =
-      (!dbMatch.venue && ev.strVenue) ||
-      (!dbMatch.city && ev.strCity);
+    // Always refresh venue/city if DB has them empty and API has data.
+    const venueMissing = (!dbMatch.venue || dbMatch.venue === '') && ev.strVenue && ev.strVenue !== '';
+    const cityMissing = (!dbMatch.city || dbMatch.city === '') && ev.strCity && ev.strCity !== '';
 
-    if (scoreChanged || statusChanged || needsMeta) {
+    logTheSportsDb('Knockout refresh check', {
+      match: dbMatch.match_number,
+      dbStatus: dbMatch.status,
+      apiStatus, newStatus, statusChanged,
+      venueMissing, cityMissing,
+    });
+
+    if (scoreChanged || statusChanged || venueMissing || cityMissing) {
       const kickoffAt = normalizeKickoffAt(ev.strTimestamp) || buildKickoffAtFromLocal(ev.dateEvent || null, ev.strTime || null);
       const utcMinus3Parts = getUtcMinus3DateParts(kickoffAt);
       const matchDate = utcMinus3Parts?.match_date || ev.dateEvent || null;
@@ -516,8 +531,8 @@ async function refreshKnockoutResults() {
       await db.prepare(`
         UPDATE matches SET
           home_score = $1, away_score = $2, status = $3,
-          venue = CASE WHEN venue = '' AND $4 != '' THEN $4 ELSE venue END,
-          city = CASE WHEN city = '' AND $5 != '' THEN $5 ELSE city END,
+          venue = CASE WHEN COALESCE(venue, '') = '' AND $4 != '' THEN $4 ELSE venue END,
+          city = CASE WHEN COALESCE(city, '') = '' AND $5 != '' THEN $5 ELSE city END,
           kickoff_at = COALESCE($6, kickoff_at),
           match_date = COALESCE($7, match_date),
           match_time = COALESCE($8, match_time),
@@ -587,9 +602,7 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
     // Refresh results for knockout matches that already have an external_event_id.
     // The round-based API doesn't include them, so we fetch them individually.
     const refreshedKnockout = await refreshKnockoutResults();
-    if (refreshedKnockout) {
-      logTheSportsDb('Knockout results refrescados', refreshedKnockout);
-    }
+    logTheSportsDb('Knockout refresh done', { changes: refreshedKnockout ? JSON.stringify(refreshedKnockout) : 'none' });
 
     const existingMatches = await db.prepare(`
       SELECT id, match_number, external_event_id, home_score, away_score, status

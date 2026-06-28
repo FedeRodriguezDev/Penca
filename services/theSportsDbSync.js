@@ -19,11 +19,13 @@ const MAX_WORLD_CUP_ROUNDS = 10;
 // (they have no strRound assigned), but they exist and can be fetched individually
 // via lookupevent.php.  We scan a reasonable ID range in parallel batches,
 // incrementally — starting from the last scanned ID stored in app_metadata.
-const KNOCKOUT_ID_SCAN_BATCH = 30;
+const KNOCKOUT_ID_SCAN_BATCH = 5;
 // How many IDs to scan ahead per daily sync (keeps each run fast).
-const KNOCKOUT_ID_SCAN_WINDOW = 3000;
+const KNOCKOUT_ID_SCAN_WINDOW = 5000;
 // Stop scanning after this many consecutive empty batches.
-const KNOCKOUT_ID_SCAN_EMPTY_LIMIT = 5;
+const KNOCKOUT_ID_SCAN_EMPTY_LIMIT = 10;
+// Delay between batches (ms) to avoid TheSportsDB rate limiting.
+const KNOCKOUT_ID_SCAN_BATCH_DELAY_MS = 200;
 
 function readIntervalMs(envName, fallbackMs) {
   const value = Number(process.env[envName]);
@@ -344,7 +346,7 @@ async function discoverKnockoutEvents(existingIds) {
   // Use a larger window on the first scan (when no previous progress exists),
   // then a smaller window for incremental daily updates.
   const isFirstScan = !lastScanIdStr;
-  const scanWindow = isFirstScan ? 80000 : KNOCKOUT_ID_SCAN_WINDOW;
+  const scanWindow = isFirstScan ? 15000 : KNOCKOUT_ID_SCAN_WINDOW;
   const scanEnd = scanStart + scanWindow;
 
   logTheSportsDb('Knockout ID scan iniciando', { scanStart, scanEnd }, 'debug');
@@ -392,6 +394,9 @@ async function discoverKnockoutEvents(existingIds) {
 
     // Save progress after each batch so interrupted scans can resume.
     await setMetadata('thesportsdb_last_knockout_scan_id', String(maxAttemptedId));
+
+    // Small delay between batches to avoid rate limiting.
+    await new Promise((r) => setTimeout(r, KNOCKOUT_ID_SCAN_BATCH_DELAY_MS));
 
     if (batchFound === 0) {
       emptyBatches += 1;
@@ -453,7 +458,7 @@ async function getScheduledSyncReason(now = new Date()) {
 // scores and status.  The round-based API doesn't include knockout matches.
 async function refreshKnockoutResults() {
   const knockoutMatches = await db.prepare(`
-    SELECT id, match_number, external_event_id, home_score, away_score, status
+    SELECT id, match_number, external_event_id, home_score, away_score, status, venue, city
     FROM matches
     WHERE match_number >= 73 AND external_event_id IS NOT NULL
   `).all();
@@ -473,7 +478,7 @@ async function refreshKnockoutResults() {
   );
 
   let scoreUpdates = 0;
-  let statusUpdates = 0;
+  let metaUpdates = 0;
 
   for (let i = 0; i < knockoutMatches.length; i++) {
     const dbMatch = knockoutMatches[i];
@@ -497,22 +502,46 @@ async function refreshKnockoutResults() {
       (awayScore != null && awayScore !== dbMatch.away_score);
     const statusChanged = newStatus !== dbMatch.status;
 
-    if (scoreChanged || statusChanged) {
+    // Always refresh metadata from TheSportsDB if the DB fields are empty.
+    const needsMeta =
+      (!dbMatch.venue && ev.strVenue) ||
+      (!dbMatch.city && ev.strCity);
+
+    if (scoreChanged || statusChanged || needsMeta) {
+      const kickoffAt = normalizeKickoffAt(ev.strTimestamp) || buildKickoffAtFromLocal(ev.dateEvent || null, ev.strTime || null);
+      const utcMinus3Parts = getUtcMinus3DateParts(kickoffAt);
+      const matchDate = utcMinus3Parts?.match_date || ev.dateEvent || null;
+      const matchTime = utcMinus3Parts?.match_time || normalizeMatchTime(ev.strTime || null);
+
       await db.prepare(`
-        UPDATE matches SET home_score = $1, away_score = $2, status = $3
-        WHERE id = $4
-      `).run(homeScore ?? dbMatch.home_score, awayScore ?? dbMatch.away_score, newStatus, dbMatch.id);
+        UPDATE matches SET
+          home_score = $1, away_score = $2, status = $3,
+          venue = CASE WHEN venue = '' AND $4 != '' THEN $4 ELSE venue END,
+          city = CASE WHEN city = '' AND $5 != '' THEN $5 ELSE city END,
+          kickoff_at = COALESCE($6, kickoff_at),
+          match_date = COALESCE($7, match_date),
+          match_time = COALESCE($8, match_time),
+          home_flag = CASE WHEN home_flag = '' AND $9 != '' THEN $9 ELSE home_flag END,
+          away_flag = CASE WHEN away_flag = '' AND $10 != '' THEN $10 ELSE away_flag END
+        WHERE id = $11
+      `).run(
+        homeScore ?? dbMatch.home_score, awayScore ?? dbMatch.away_score, newStatus,
+        ev.strVenue || '', ev.strCity || '',
+        kickoffAt, matchDate, matchTime,
+        ev.strHomeTeamBadge || '', ev.strAwayTeamBadge || '',
+        dbMatch.id
+      );
 
       if (newStatus === 'finished' && (homeScore != null && awayScore != null)) {
         scoreUpdates += await recalculatePointsForMatch(dbMatch.id, homeScore, awayScore);
       } else if (scoreChanged && newStatus !== 'finished') {
         await clearPointsForMatch(dbMatch.id);
       }
-      statusUpdates++;
+      metaUpdates++;
     }
   }
 
-  return scoreUpdates || statusUpdates ? { matches: knockoutMatches.length, scoreUpdates, statusUpdates } : null;
+  return scoreUpdates || metaUpdates ? { matches: knockoutMatches.length, scoreUpdates, metaUpdates } : null;
 }
 
 async function syncWorldCupMatches({ force = false, source = 'manual', reason = null } = {}) {

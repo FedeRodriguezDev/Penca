@@ -65,7 +65,8 @@ async function main() {
   ];
 
   const found = [];
-  const BATCH = 30;
+  const BATCH = 5;
+  const BATCH_DELAY = 200;
 
   for (const [from, to] of ranges) {
     for (let batchStart = from; batchStart <= to; batchStart += BATCH) {
@@ -102,6 +103,7 @@ async function main() {
 
       process.stderr.write('.');
       if (found.length >= 35) break;
+      await new Promise((r) => setTimeout(r, BATCH_DELAY));
     }
     if (found.length >= 35) break;
   }

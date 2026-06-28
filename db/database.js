@@ -292,13 +292,13 @@ async function initializeDatabase() {
 const KNOCKOUT_PLACEHOLDERS = [
   // Ronda de 32 (matches 73-88): June 28 – July 3
   // Matches with confirmed teams (from TheSportsDB as of June 27).
-  { num: 73,  stage: 'Ronda de 32',       date: '2026-06-28', time: '19:00', home: 'Sudáfrica',       away: 'Canadá',               extId: '2499618' },
-  { num: 74,  stage: 'Ronda de 32',       date: '2026-06-29', time: '17:00', home: 'Brasil',          away: 'Japón',                extId: '2499835' },
-  { num: 75,  stage: 'Ronda de 32',       date: '2026-06-29', time: '20:30', home: 'Alemania',        away: 'Paraguay',             extId: '2502846' },
-  { num: 76,  stage: 'Ronda de 32',       date: '2026-06-30', time: '01:00', home: 'Países Bajos',    away: 'Marruecos',            extId: '2499836' },
-  { num: 77,  stage: 'Ronda de 32',       date: '2026-06-30', time: '17:00', home: 'Costa de Marfil', away: 'Noruega',              extId: '2502605' },
-  { num: 78,  stage: 'Ronda de 32',       date: '2026-06-30', time: '21:00', home: 'Francia',         away: 'Suecia',               extId: '2502847' },
-  { num: 79,  stage: 'Ronda de 32',       date: '2026-07-02', time: '00:00', home: 'Estados Unidos',  away: 'Bosnia y Herzegovina', extId: '2499837' },
+  { num: 73,  stage: 'Ronda de 32',       date: '2026-06-28', time: '19:00', home: 'Sudáfrica',       away: 'Canadá',               extId: '2499618', badgeH: 'https://r2.thesportsdb.com/images/media/team/badge/xjz9j91553368824.png', badgeA: 'https://r2.thesportsdb.com/images/media/team/badge/2t631f1595154867.png' },
+  { num: 74,  stage: 'Ronda de 32',       date: '2026-06-29', time: '17:00', home: 'Brasil',          away: 'Japón',                extId: '2499835', badgeH: 'https://r2.thesportsdb.com/images/media/team/badge/jl6dip1726167280.png', badgeA: 'https://r2.thesportsdb.com/images/media/team/badge/ffsyxz1591989843.png' },
+  { num: 75,  stage: 'Ronda de 32',       date: '2026-06-29', time: '20:30', home: 'Alemania',        away: 'Paraguay',             extId: '2502846', badgeH: 'https://r2.thesportsdb.com/images/media/team/badge/1xysi51726167152.png', badgeA: 'https://r2.thesportsdb.com/images/media/team/badge/khgav41553419195.png' },
+  { num: 76,  stage: 'Ronda de 32',       date: '2026-06-30', time: '01:00', home: 'Países Bajos',    away: 'Marruecos',            extId: '2499836', badgeH: 'https://r2.thesportsdb.com/images/media/team/badge/1p0hr41593787110.png', badgeA: 'https://r2.thesportsdb.com/images/media/team/badge/hbmwkj1731791275.png' },
+  { num: 77,  stage: 'Ronda de 32',       date: '2026-06-30', time: '17:00', home: 'Costa de Marfil', away: 'Noruega',              extId: '2502605', badgeH: 'https://r2.thesportsdb.com/images/media/team/badge/rwxuuu1455465643.png', badgeA: 'https://r2.thesportsdb.com/images/media/team/badge/gyfn811591973155.png' },
+  { num: 78,  stage: 'Ronda de 32',       date: '2026-06-30', time: '21:00', home: 'Francia',         away: 'Suecia',               extId: '2502847', badgeH: 'https://r2.thesportsdb.com/images/media/team/badge/p3n0z51726166851.png', badgeA: 'https://r2.thesportsdb.com/images/media/team/badge/h5adzg1591981772.png' },
+  { num: 79,  stage: 'Ronda de 32',       date: '2026-07-02', time: '00:00', home: 'Estados Unidos',  away: 'Bosnia y Herzegovina', extId: '2499837', badgeH: 'https://r2.thesportsdb.com/images/media/team/badge/21f0oi1597948195.png', badgeA: 'https://r2.thesportsdb.com/images/media/team/badge/wtqqst1455463120.png' },
   // Still TBD — will be updated by sync when TheSportsDB publishes teams.
   { num: 80,  stage: 'Ronda de 32',       date: '2026-06-30', time: '20:00' },
   { num: 81,  stage: 'Ronda de 32',       date: '2026-07-01', time: '15:00' },
@@ -347,10 +347,10 @@ async function ensureKnockoutPlaceholders() {
     const home = m.home || 'A determinar';
     const away = m.away || 'A determinar';
     await pool.query(
-      `INSERT INTO matches (match_number, stage, home_team, away_team, match_date, match_time, kickoff_at, venue, city, external_event_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO matches (match_number, stage, home_team, away_team, home_flag, away_flag, match_date, match_time, kickoff_at, venue, city, external_event_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (match_number) DO NOTHING`,
-      [m.num, m.stage, home, away, m.date, m.time, kickoffAt, '', '', m.extId || null]
+      [m.num, m.stage, home, away, m.badgeH || '', m.badgeA || '', m.date, m.time, kickoffAt, '', '', m.extId || null]
     );
   }
   console.log('✅ Placeholders de eliminatoria cargados');

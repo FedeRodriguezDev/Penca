@@ -869,9 +869,9 @@ async function getSyncStatus() {
 }
 
 function startDailyWorldCupSync() {
-  const runScheduledSync = async () => {
+  const runScheduledSync = async (opts = {}) => {
     try {
-      const result = await syncWorldCupMatches({ source: 'scheduler' });
+      const result = await syncWorldCupMatches({ source: 'scheduler', ...opts });
       if (!result.skipped) {
         console.log(`🔄 TheSportsDB sync OK [${result.reason || 'manual'}]: ${result.fetched} partidos, ${result.inserted} nuevos, ${result.updated} actualizados`);
       }
@@ -880,8 +880,11 @@ function startDailyWorldCupSync() {
     }
   };
 
-  runScheduledSync();
-  const timer = setInterval(runScheduledSync, SCHEDULED_SYNC_CHECK_MS);
+  // Always force a full sync on startup — this ensures fresh deployments
+  // get the latest match data immediately, regardless of when the last
+  // scheduled sync ran.
+  runScheduledSync({ force: true, reason: 'startup' });
+  const timer = setInterval(() => runScheduledSync(), SCHEDULED_SYNC_CHECK_MS);
   if (typeof timer.unref === 'function') timer.unref();
   return timer;
 }

@@ -247,7 +247,14 @@ async function sendPhaseReadyNotifications() {
     const allReady = matches.every(m => !isTeamTbd(m.home_team) && !isTeamTbd(m.away_team));
     if (!allReady) continue;
 
-    // Phase is ready! Get users with notifications enabled
+    // Phase is ready!  Double-check we haven't already notified this phase
+    // (defense-in-depth against race conditions).
+    const alreadyRecorded = await db.prepare(
+      'SELECT value FROM app_metadata WHERE key = $1'
+    ).get(`phase_ready_notified_${stage}`);
+    if (alreadyRecorded) continue;
+
+    // Get users with notifications enabled
     const users = await db.prepare(`
       SELECT id, username, email FROM users
       WHERE COALESCE(email_verified, false) = true
@@ -293,15 +300,29 @@ async function sendPhaseReadyNotifications() {
   return sent;
 }
 
-async function runEmailNotificationCycle() {
-  const [remindersSent, resultsSent, phasesSent] = await Promise.all([
-    sendReminderNotifications(),
-    sendResultNotifications(),
-    sendPhaseReadyNotifications(),
-  ]);
+// Prevent concurrent execution of the notification cycle.  The timer fires
+// every 5 minutes but a cycle can take longer if SMTP is slow, and the
+// initial startup cycle overlaps with the sync which loads new match data.
+// Without this guard, two overlapping cycles could both see a phase as
+// "not yet notified" and send duplicate emails before either one writes
+// the phase_ready_notified_* metadata key.
+let _notificationCycleRunning = false;
 
-  if (remindersSent || resultsSent || phasesSent) {
-    console.log(`[email] Notificaciones enviadas: recordatorios=${remindersSent}, resultados=${resultsSent}, fases=${phasesSent}`);
+async function runEmailNotificationCycle() {
+  if (_notificationCycleRunning) return;
+  _notificationCycleRunning = true;
+  try {
+    const [remindersSent, resultsSent, phasesSent] = await Promise.all([
+      sendReminderNotifications(),
+      sendResultNotifications(),
+      sendPhaseReadyNotifications(),
+    ]);
+
+    if (remindersSent || resultsSent || phasesSent) {
+      console.log(`[email] Notificaciones enviadas: recordatorios=${remindersSent}, resultados=${resultsSent}, fases=${phasesSent}`);
+    }
+  } finally {
+    _notificationCycleRunning = false;
   }
 }
 

@@ -12,19 +12,22 @@ const THESPORTSDB_API_KEY = process.env.THESPORTSDB_API_KEY || '123';
 const WORLD_CUP_LEAGUE_ID = process.env.THESPORTSDB_WORLD_CUP_LEAGUE_ID || '4429';
 const WORLD_CUP_SEASON = process.env.THESPORTSDB_WORLD_CUP_SEASON || '2026';
 const THESPORTSDB_LOG_LEVEL = (process.env.THESPORTSDB_LOG_LEVEL || 'basic').toLowerCase();
-const MAX_WORLD_CUP_ROUNDS = 10;
+// TheSportsDB uses intRound values for its eventsround.php endpoint.
+// Group stage: matchdays 1-6 (intRound 1-6, but typical World Cup has 3 matchdays).
+// Knockout: intRound = number of teams in the round (32, 16, 8, 4, 2).
+// We fetch all known round numbers explicitly instead of scanning sequentially
+// because knockout rounds are numerically far from group-stage rounds.
+const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 4, 5, 6, 32, 16, 8, 4, 2];
 
-// Knockout event discovery via ID scanning.
-// TheSportsDB API does not return knockout-stage events via eventsround.php
-// (they have no strRound assigned), but they exist and can be fetched individually
-// via lookupevent.php.  We scan a reasonable ID range in parallel batches,
-// incrementally — starting from the last scanned ID stored in app_metadata.
+// Delay between round fetches (ms). Free API tier allows 30 req/min = 2s/req.
+// We use 2.5s to stay safely under the limit.
+const ROUND_FETCH_DELAY_MS = 2500;
+
+// Knockout event discovery via ID scanning (fallback only).
+// Used as a safety net for events that may not appear via eventsround.php.
 const KNOCKOUT_ID_SCAN_BATCH = 5;
-// How many IDs to scan ahead per daily sync (keeps each run fast).
-const KNOCKOUT_ID_SCAN_WINDOW = 5000;
-// Stop scanning after this many consecutive empty batches.
-const KNOCKOUT_ID_SCAN_EMPTY_LIMIT = 10;
-// Delay between batches (ms) to avoid TheSportsDB rate limiting.
+const KNOCKOUT_ID_SCAN_WINDOW = 3000;
+const KNOCKOUT_ID_SCAN_EMPTY_LIMIT = 8;
 const KNOCKOUT_ID_SCAN_BATCH_DELAY_MS = 200;
 
 function readIntervalMs(envName, fallbackMs) {
@@ -245,9 +248,13 @@ async function clearPointsForMatch(matchId) {
 
 async function fetchWorldCupEvents({ skipKnockoutScan = false } = {}) {
   const collectedEvents = [];
-  let emptyRoundsInARow = 0;
 
-  for (let round = 1; round <= MAX_WORLD_CUP_ROUNDS; round += 1) {
+  // Fetch events by known round numbers. TheSportsDB uses intRound values:
+  // 1-6 = group stage matchdays, 32 = Round of 32, 16 = Round of 16,
+  // 8 = Quarterfinals, 4 = Semifinals, 2 = Final & Third Place.
+  // Knockout rounds (32, 16, etc.) are not contiguous with group rounds (1-6),
+  // so we query them explicitly instead of scanning sequentially.
+  for (const round of WORLD_CUP_ROUND_NUMBERS) {
     const endpoint = `${THESPORTSDB_API_BASE}/${THESPORTSDB_API_KEY}/eventsround.php?id=${WORLD_CUP_LEAGUE_ID}&r=${round}&s=${WORLD_CUP_SEASON}`;
     const startedAt = Date.now();
     logTheSportsDb('GET eventsround', {
@@ -283,26 +290,21 @@ async function fetchWorldCupEvents({ skipKnockoutScan = false } = {}) {
       filteredLeagueEvents: roundEvents.length,
     }, 'debug');
 
-    if (!roundEvents.length) {
-      emptyRoundsInARow += 1;
-      if (collectedEvents.length > 0 && emptyRoundsInARow >= 2) {
-        break;
-      }
-      continue;
+    if (roundEvents.length) {
+      collectedEvents.push(...roundEvents);
     }
 
-    emptyRoundsInARow = 0;
-    collectedEvents.push(...roundEvents);
+    // Respect rate limit: free tier = 30 req/min.
+    await new Promise((r) => setTimeout(r, ROUND_FETCH_DELAY_MS));
   }
 
-  // Discover knockout-stage events that TheSportsDB doesn't return via round queries.
-  // These events have no strRound value and exist only via individual lookup.
+  // Fallback ID scan for any events that may have slipped through the round-based API.
   // Only run during full fixture syncs (not lightweight result-refresh).
   if (!skipKnockoutScan) {
     const existingIds = new Set(collectedEvents.map((event) => String(event.idEvent)));
     const knockoutEvents = await discoverKnockoutEvents(existingIds);
     if (knockoutEvents.length) {
-      logTheSportsDb('Knockout events descubiertos via ID scan', {
+      logTheSportsDb('Knockout events descubiertos via ID scan (fallback)', {
         count: knockoutEvents.length,
         first: knockoutEvents[0] ? `${knockoutEvents[0].strEvent} (${knockoutEvents[0].dateEvent})` : null,
         last: knockoutEvents.at(-1) ? `${knockoutEvents.at(-1).strEvent} (${knockoutEvents.at(-1).dateEvent})` : null,
@@ -503,6 +505,11 @@ async function refreshKnockoutResults() {
       newStatus = 'live';
     }
 
+    // Never downgrade a finished match — protects predictions from being cleared.
+    if (dbMatch.status === 'finished') {
+      newStatus = 'finished';
+    }
+
     const homeScore = ev.intHomeScore != null && ev.intHomeScore !== '' ? parseInt(ev.intHomeScore, 10) : null;
     const awayScore = ev.intAwayScore != null && ev.intAwayScore !== '' ? parseInt(ev.intAwayScore, 10) : null;
 
@@ -549,7 +556,7 @@ async function refreshKnockoutResults() {
 
       if (newStatus === 'finished' && (homeScore != null && awayScore != null)) {
         scoreUpdates += await recalculatePointsForMatch(dbMatch.id, homeScore, awayScore);
-      } else if (scoreChanged && newStatus !== 'finished') {
+      } else if (scoreChanged && newStatus !== 'finished' && dbMatch.status !== 'finished') {
         await clearPointsForMatch(dbMatch.id);
       }
       metaUpdates++;
@@ -605,7 +612,7 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
     logTheSportsDb('Knockout refresh done', { changes: refreshedKnockout ? JSON.stringify(refreshedKnockout) : 'none' });
 
     const existingMatches = await db.prepare(`
-      SELECT id, match_number, external_event_id, home_score, away_score, status
+      SELECT id, match_number, external_event_id, home_score, away_score, status, home_team, away_team
       FROM matches
       ORDER BY match_number ASC
     `).all();
@@ -632,27 +639,115 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
       }
 
       if (existingMatch) {
+        // Protect existing match data: for matches that already have real teams
+        // (not placeholders), only update mutable fields (scores, status, schedule)
+        // and only fill in fields that are currently empty.
+        // Never overwrite team names or match_number for a match that's already set.
+        const isPlaceholder = !existingMatch.external_event_id
+          || existingMatch.home_team === 'A determinar'
+          || !existingMatch.home_team;
+
+        // Determine the effective status: never downgrade from 'finished' to
+        // something else, since that would incorrectly clear legitimate points.
+        const effectiveStatus = existingMatch.status === 'finished'
+          ? 'finished'
+          : remoteMatch.status;
+
+        // Only fill team names if the existing slot is a placeholder.
+        const effectiveHomeTeam = isPlaceholder
+          ? remoteMatch.home_team
+          : existingMatch.home_team;
+        const effectiveAwayTeam = isPlaceholder
+          ? remoteMatch.away_team
+          : existingMatch.away_team;
+
         await db.prepare(`
-          UPDATE matches
-          SET match_number = $1,
-              stage = $2,
-              group_name = $3,
-              home_team = $4,
-              away_team = $5,
-              home_flag = $6,
-              away_flag = $7,
-              match_date = $8,
-              match_time = $9,
-              kickoff_at = $10,
-              venue = $11,
-              city = $12,
-              home_score = $13,
-              away_score = $14,
-              external_event_id = $15,
-              status = $16
+          UPDATE matches SET
+            home_team = $1,
+            away_team = $2,
+            home_flag = CASE WHEN COALESCE(home_flag, '') = '' AND $3 != '' THEN $3 ELSE home_flag END,
+            away_flag = CASE WHEN COALESCE(away_flag, '') = '' AND $4 != '' THEN $4 ELSE away_flag END,
+            match_date = COALESCE($5, match_date),
+            match_time = COALESCE($6, match_time),
+            kickoff_at = COALESCE($7, kickoff_at),
+            venue = CASE WHEN COALESCE(venue, '') = '' AND $8 != '' THEN $8 ELSE venue END,
+            city = CASE WHEN COALESCE(city, '') = '' AND $9 != '' THEN $9 ELSE city END,
+            home_score = $10,
+            away_score = $11,
+            external_event_id = COALESCE(external_event_id, $12),
+            status = $13,
+            stage = CASE WHEN stage IS NULL OR stage = '' THEN $14 ELSE stage END,
+            group_name = CASE WHEN group_name IS NULL OR group_name = '' THEN $15 ELSE group_name END,
+            match_number = match_number
+          WHERE id = $16
+        `).run(
+          effectiveHomeTeam,
+          effectiveAwayTeam,
+          remoteMatch.home_flag,
+          remoteMatch.away_flag,
+          remoteMatch.match_date,
+          remoteMatch.match_time,
+          remoteMatch.kickoff_at,
+          remoteMatch.venue,
+          remoteMatch.city,
+          remoteMatch.home_score,
+          remoteMatch.away_score,
+          remoteMatch.external_event_id,
+          effectiveStatus,
+          remoteMatch.stage,
+          remoteMatch.group_name,
+          existingMatch.id,
+        );
+        updated += 1;
+        byExternalId.set(remoteMatch.external_event_id, { ...existingMatch, external_event_id: remoteMatch.external_event_id });
+        byMatchNumber.set(existingMatch.match_number, { ...existingMatch, match_number: existingMatch.match_number });
+
+        // Only recalculate/clear points if scores or status actually changed.
+        const scoreChanged = remoteMatch.home_score !== existingMatch.home_score
+          || remoteMatch.away_score !== existingMatch.away_score;
+        const statusChangedToFinished = effectiveStatus === 'finished'
+          && existingMatch.status !== 'finished';
+
+        if (statusChangedToFinished && remoteMatch.home_score != null && remoteMatch.away_score != null) {
+          recalculatedPredictions += await recalculatePointsForMatch(
+            existingMatch.id, remoteMatch.home_score, remoteMatch.away_score
+          );
+        } else if (scoreChanged && effectiveStatus !== 'finished' && existingMatch.status !== 'finished') {
+          // Scores changed but match still in progress — clear pending points.
+          await clearPointsForMatch(existingMatch.id);
+        }
+        // If nothing changed, leave predictions untouched.
+        continue;
+      }
+
+      // New event — find an available match_number slot, starting from the
+      // suggested one.  Placeholder slots (no external_event_id) are reused
+      // instead of skipped.
+      let insertNum = remoteMatch.match_number;
+      let reuseSlot = null;
+      let newMatchId = null;
+      while (byMatchNumber.has(insertNum)) {
+        const slot = byMatchNumber.get(insertNum);
+        if (!slot.external_event_id) {
+          // Placeholder slot — reuse it.
+          reuseSlot = slot;
+          break;
+        }
+        insertNum++;
+      }
+
+      if (reuseSlot) {
+        // Reuse the placeholder slot with an UPDATE.
+        await db.prepare(`
+          UPDATE matches SET
+            match_number = $1, stage = $2, group_name = $3,
+            home_team = $4, away_team = $5, home_flag = $6, away_flag = $7,
+            match_date = $8, match_time = $9, kickoff_at = $10,
+            venue = $11, city = $12, home_score = $13, away_score = $14,
+            external_event_id = $15, status = $16
           WHERE id = $17
         `).run(
-          existingMatch.match_number,
+          insertNum,
           remoteMatch.stage,
           remoteMatch.group_name,
           remoteMatch.home_team,
@@ -668,61 +763,47 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
           remoteMatch.away_score,
           remoteMatch.external_event_id,
           remoteMatch.status,
-          existingMatch.id,
+          reuseSlot.id,
         );
-        updated += 1;
-        byExternalId.set(remoteMatch.external_event_id, { ...existingMatch, external_event_id: remoteMatch.external_event_id });
-        byMatchNumber.set(remoteMatch.match_number, { ...existingMatch, match_number: remoteMatch.match_number });
-
-        if (remoteMatch.status === 'finished') {
-          recalculatedPredictions += await recalculatePointsForMatch(existingMatch.id, remoteMatch.home_score, remoteMatch.away_score);
-        } else {
-          await clearPointsForMatch(existingMatch.id);
-        }
-        continue;
+        inserted += 1;
+        newMatchId = reuseSlot.id;
+        byExternalId.set(remoteMatch.external_event_id, { ...reuseSlot, external_event_id: remoteMatch.external_event_id });
+        byMatchNumber.set(insertNum, { ...reuseSlot, match_number: insertNum, external_event_id: remoteMatch.external_event_id });
+      } else {
+        const insertedInfo = await db.prepare(`
+          INSERT INTO matches (
+            match_number, stage, group_name, home_team, away_team, home_flag, away_flag,
+            match_date, match_time, kickoff_at, venue, city, home_score, away_score, external_event_id, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          RETURNING id
+        `).get(
+          insertNum,
+          remoteMatch.stage,
+          remoteMatch.group_name,
+          remoteMatch.home_team,
+          remoteMatch.away_team,
+          remoteMatch.home_flag,
+          remoteMatch.away_flag,
+          remoteMatch.match_date,
+          remoteMatch.match_time,
+          remoteMatch.kickoff_at,
+          remoteMatch.venue,
+          remoteMatch.city,
+          remoteMatch.home_score,
+          remoteMatch.away_score,
+          remoteMatch.external_event_id,
+          remoteMatch.status,
+        );
+        inserted += 1;
+        newMatchId = insertedInfo.id;
+        byExternalId.set(remoteMatch.external_event_id, { id: newMatchId, match_number: insertNum, external_event_id: remoteMatch.external_event_id });
+        byMatchNumber.set(insertNum, { id: newMatchId, match_number: insertNum, external_event_id: remoteMatch.external_event_id });
       }
-
-      // New event — find an available match_number slot, starting from the
-      // suggested one.  This prevents collisions with placeholders that already
-      // have a different external_event_id.
-      let insertNum = remoteMatch.match_number;
-      while (byMatchNumber.has(insertNum)) {
-        insertNum++;
-      }
-
-      const insertedInfo = await db.prepare(`
-        INSERT INTO matches (
-          match_number, stage, group_name, home_team, away_team, home_flag, away_flag,
-          match_date, match_time, kickoff_at, venue, city, home_score, away_score, external_event_id, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        RETURNING id
-      `).get(
-        insertNum,
-        remoteMatch.stage,
-        remoteMatch.group_name,
-        remoteMatch.home_team,
-        remoteMatch.away_team,
-        remoteMatch.home_flag,
-        remoteMatch.away_flag,
-        remoteMatch.match_date,
-        remoteMatch.match_time,
-        remoteMatch.kickoff_at,
-        remoteMatch.venue,
-        remoteMatch.city,
-        remoteMatch.home_score,
-        remoteMatch.away_score,
-        remoteMatch.external_event_id,
-        remoteMatch.status,
-      );
-      inserted += 1;
-      const insertedId = insertedInfo.id;
-      byExternalId.set(remoteMatch.external_event_id, { id: insertedId, match_number: insertNum, external_event_id: remoteMatch.external_event_id });
-      byMatchNumber.set(insertNum, { id: insertedId, match_number: insertNum, external_event_id: remoteMatch.external_event_id });
 
       if (remoteMatch.status === 'finished') {
-        recalculatedPredictions += await recalculatePointsForMatch(insertedId, remoteMatch.home_score, remoteMatch.away_score);
+        recalculatedPredictions += await recalculatePointsForMatch(newMatchId, remoteMatch.home_score, remoteMatch.away_score);
       } else {
-        await clearPointsForMatch(insertedId);
+        await clearPointsForMatch(newMatchId);
       }
     }
 

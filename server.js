@@ -55,17 +55,20 @@ setInterval(() => { const now = Date.now(); for (const [ip, e] of _rlMap) { if (
 // Validate Host header to prevent open redirect
 const ALLOWED_HOSTS = (process.env.ALLOWED_HOSTS || 'penca.infoclub.com.uy').split(',').map(h => h.trim());
 
-// HTTPS redirect: el Classic LB de AWS añade X-Forwarded-Proto
-app.use((req, res, next) => {
-  if (req.headers['x-forwarded-proto'] === 'http') {
-    const host = req.headers.host || '';
-    if (!ALLOWED_HOSTS.some(h => host === h || host === `${h}:443`)) {
-      return res.status(400).end();
-    }
-    return res.redirect(301, `https://${host}${req.url}`);
-  }
-  next();
-});
+// HTTPS: Cloudflare proxy maneja TLS (Flexible mode).
+// El ALB de AWS ya no está — Cloudflare conecta por HTTP al origen y
+// sirve HTTPS al usuario final. No redirigir porque Cloudflare envía
+// X-Forwarded-Proto: http y causaría un loop.
+// app.use((req, res, next) => {
+//   if (req.headers['x-forwarded-proto'] === 'http') {
+//     const host = req.headers.host || '';
+//     if (!ALLOWED_HOSTS.some(h => host === h || host === `${h}:443`)) {
+//       return res.status(400).end();
+//     }
+//     return res.redirect(301, `https://${host}${req.url}`);
+//   }
+//   next();
+// });
 
 // Security headers
 app.use((req, res, next) => {

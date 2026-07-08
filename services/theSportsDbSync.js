@@ -15,9 +15,10 @@ const THESPORTSDB_LOG_LEVEL = (process.env.THESPORTSDB_LOG_LEVEL || 'basic').toL
 // TheSportsDB uses intRound values for its eventsround.php endpoint.
 // Group stage: matchdays 1-6 (intRound 1-6, but typical World Cup has 3 matchdays).
 // Knockout: intRound = number of teams in the round (32, 16, 8, 4, 2).
-// We fetch all known round numbers explicitly instead of scanning sequentially
-// because knockout rounds are numerically far from group-stage rounds.
-const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 4, 5, 6, 32, 16, 8, 4, 2];
+// However, TheSportsDB sometimes assigns non-standard round numbers (e.g. 125 for
+// quarterfinals). We fetch all known round numbers explicitly instead of scanning
+// sequentially because knockout rounds are numerically far from group-stage rounds.
+const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 4, 5, 6, 32, 16, 125, 8, 4, 2];
 
 // Delay between round fetches (ms). Free API tier allows 30 req/min = 2s/req.
 // We use 2.5s to stay safely under the limit.
@@ -147,6 +148,7 @@ function mapApiStatus(status) {
     normalized === 'FT' ||
     normalized === 'AET' ||
     normalized === 'PEN' ||
+    normalized === 'AP' ||
     normalized.includes('FINISHED') ||
     normalized.includes('FULL TIME')
   ) {
@@ -499,7 +501,7 @@ async function refreshKnockoutResults() {
 
     const apiStatus = String(ev.strStatus || '').trim().toUpperCase();
     let newStatus = dbMatch.status;
-    if (apiStatus === 'FT' || apiStatus === 'AET' || apiStatus === 'PEN' || apiStatus.includes('FINISHED')) {
+    if (apiStatus === 'FT' || apiStatus === 'AET' || apiStatus === 'PEN' || apiStatus === 'AP' || apiStatus.includes('FINISHED')) {
       newStatus = 'finished';
     } else if (apiStatus && apiStatus !== 'NS' && apiStatus !== 'NOT STARTED') {
       newStatus = 'live';

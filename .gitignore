@@ -8,3 +8,4 @@ transform.js
 all_routes.txt
 tail_logs.txt
 .ebextensions/
+scripts/

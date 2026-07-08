@@ -36,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -82,6 +82,14 @@ jobs:
               ]                                                                                    
             }' > .ebextensions/01_environment.config
 
+      - name: Build version label
+        id: vars
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+          TIMESTAMP=$(date +%s)
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "version_label=gha-${TIMESTAMP}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
       - name: Create deployment package
         run: |
           zip -r deploy.zip . \
@@ -91,6 +99,8 @@ jobs:
 
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v22
+        env:
+          ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
         with:
           aws_access_key: ${{ steps.awscreds.outputs.aws-access-key-id }}
           aws_secret_key: ${{ steps.awscreds.outputs.aws-secret-access-key }}

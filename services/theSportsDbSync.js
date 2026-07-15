@@ -13,17 +13,12 @@ const WORLD_CUP_LEAGUE_ID = process.env.THESPORTSDB_WORLD_CUP_LEAGUE_ID || '4429
 const WORLD_CUP_SEASON = process.env.THESPORTSDB_WORLD_CUP_SEASON || '2026';
 const THESPORTSDB_LOG_LEVEL = (process.env.THESPORTSDB_LOG_LEVEL || 'basic').toLowerCase();
 // TheSportsDB uses intRound values for its eventsround.php endpoint.
-// Group stage: matchdays 1-6 (intRound 1-6).
-// Knockout: intRound values discovered empirically from TheSportsDB API:
-//   32  = Round of 32
-//   16  = Round of 16
-//   125 = Quarterfinals
-//   150 = Semifinals
-//   4, 2 = Final / Third Place (TBD — check eventsday.php?d=YYYY-MM-DD&l=4429
-//          when those dates approach; add intRound to stageFromIntRound() too)
-// We fetch all known round numbers explicitly. New knockout rounds (Third Place,
-// Final) will be added here once their intRound values are discovered.
-const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 4, 5, 6, 32, 16, 125, 150, 8, 4, 2];
+// Known intRound values for the 2026 World Cup (discovered empirically).
+// Group stage: matchdays 1-3 only (4-6 are empty for this tournament).
+// Knockout rounds have non-sequential, arbitrary intRound values.
+// New rounds (Third Place, Final) must be added here when discovered via
+// eventsday.php?d=YYYY-MM-DD&l=4429 on the relevant dates.
+const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 32, 16, 125, 150];
 
 // Delay between round fetches (ms). Free API tier allows 30 req/min = 2s/req.
 // We use 2.5s to stay safely under the limit.
@@ -217,7 +212,10 @@ function stageFromIntRound(intRound) {
   if (r === 16) return 'Octavos de Final';
   if (r === 125) return 'Cuartos de Final';
   if (r === 150) return 'Semifinal';
-  // Third Place / Final TBD — add when discovered
+  // Third Place / Final — intRound values TBD.  Discover via:
+  //   eventsday.php?d=2026-07-18&l=4429  (Third Place)
+  //   eventsday.php?d=2026-07-19&l=4429  (Final)
+  // then add the intRound here and to WORLD_CUP_ROUND_NUMBERS.
   return null;
 }
 

@@ -14,11 +14,15 @@ const WORLD_CUP_SEASON = process.env.THESPORTSDB_WORLD_CUP_SEASON || '2026';
 const THESPORTSDB_LOG_LEVEL = (process.env.THESPORTSDB_LOG_LEVEL || 'basic').toLowerCase();
 // TheSportsDB uses intRound values for its eventsround.php endpoint.
 // Group stage: matchdays 1-6 (intRound 1-6, but typical World Cup has 3 matchdays).
-// Knockout: intRound = number of teams in the round (32, 16, 8, 4, 2).
-// However, TheSportsDB sometimes assigns non-standard round numbers (e.g. 125 for
-// quarterfinals). We fetch all known round numbers explicitly instead of scanning
-// sequentially because knockout rounds are numerically far from group-stage rounds.
-const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 4, 5, 6, 32, 16, 125, 8, 4, 2];
+// Knockout: intRound values discovered empirically from TheSportsDB API:
+//   32  = Round of 32
+//   16  = Round of 16
+//   125 = Quarterfinals
+//   150 = Semifinals
+//   4, 2 = Final / Third Place (TBD — may differ)
+// We fetch all known round numbers explicitly instead of scanning sequentially
+// because knockout rounds are numerically far from group-stage rounds.
+const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 4, 5, 6, 32, 16, 125, 150, 8, 4, 2];
 
 // Delay between round fetches (ms). Free API tier allows 30 req/min = 2s/req.
 // We use 2.5s to stay safely under the limit.
@@ -187,8 +191,10 @@ function getStageByMatchNumber(matchNumber) {
   if (matchNumber <= 88) return 'Ronda de 32';
   if (matchNumber <= 96) return 'Octavos de Final';
   if (matchNumber <= 100) return 'Cuartos de Final';
-  if (matchNumber <= 102) return 'Semifinal';
-  if (matchNumber === 103) return 'Tercer Puesto';
+  // Semifinals and finals may be at non-standard match numbers (e.g. 105-106
+  // if added manually or re-ordered). Use broad ranges.
+  if (matchNumber <= 106) return 'Semifinal';
+  if (matchNumber <= 108) return 'Tercer Puesto';
   return 'Final';
 }
 

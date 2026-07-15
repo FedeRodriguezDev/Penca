@@ -13,15 +13,16 @@ const WORLD_CUP_LEAGUE_ID = process.env.THESPORTSDB_WORLD_CUP_LEAGUE_ID || '4429
 const WORLD_CUP_SEASON = process.env.THESPORTSDB_WORLD_CUP_SEASON || '2026';
 const THESPORTSDB_LOG_LEVEL = (process.env.THESPORTSDB_LOG_LEVEL || 'basic').toLowerCase();
 // TheSportsDB uses intRound values for its eventsround.php endpoint.
-// Group stage: matchdays 1-6 (intRound 1-6, but typical World Cup has 3 matchdays).
+// Group stage: matchdays 1-6 (intRound 1-6).
 // Knockout: intRound values discovered empirically from TheSportsDB API:
 //   32  = Round of 32
 //   16  = Round of 16
 //   125 = Quarterfinals
 //   150 = Semifinals
-//   4, 2 = Final / Third Place (TBD — may differ)
-// We fetch all known round numbers explicitly instead of scanning sequentially
-// because knockout rounds are numerically far from group-stage rounds.
+//   4, 2 = Final / Third Place (TBD — check eventsday.php?d=YYYY-MM-DD&l=4429
+//          when those dates approach; add intRound to stageFromIntRound() too)
+// We fetch all known round numbers explicitly. New knockout rounds (Third Place,
+// Final) will be added here once their intRound values are discovered.
 const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 4, 5, 6, 32, 16, 125, 150, 8, 4, 2];
 
 // Delay between round fetches (ms). Free API tier allows 30 req/min = 2s/req.
@@ -187,15 +188,37 @@ function cleanGroupName(groupName, matchNumber) {
 }
 
 function getStageByMatchNumber(matchNumber) {
+  // Natural progression: groups → R32 → R16 → QF → SF → 3rd → Final
+  // Matches 105-106 are semifinal slots that were manually positioned
+  // outside the natural sequence. The sync preserves stage for existing
+  // matches via external_event_id matching, so this function matters
+  // only for brand-new rows inserted by the sync.
   if (matchNumber <= 72) return 'Fase de Grupos';
   if (matchNumber <= 88) return 'Ronda de 32';
   if (matchNumber <= 96) return 'Octavos de Final';
   if (matchNumber <= 100) return 'Cuartos de Final';
-  // Semifinals and finals may be at non-standard match numbers (e.g. 105-106
-  // if added manually or re-ordered). Use broad ranges.
+  if (matchNumber <= 102) return 'Semifinal';
+  if (matchNumber <= 103) return 'Tercer Puesto';
+  // 104: Final (natural slot)
+  // 105-106: Semifinal (manual override slots)
   if (matchNumber <= 106) return 'Semifinal';
-  if (matchNumber <= 108) return 'Tercer Puesto';
   return 'Final';
+}
+
+/**
+ * Map TheSportsDB intRound to a stage name for new matches.
+ * For existing matches the DB value is always preserved.
+ */
+function stageFromIntRound(intRound) {
+  const r = parseInt(intRound, 10);
+  if (!r) return null;
+  if (r <= 6) return 'Fase de Grupos';
+  if (r === 32) return 'Ronda de 32';
+  if (r === 16) return 'Octavos de Final';
+  if (r === 125) return 'Cuartos de Final';
+  if (r === 150) return 'Semifinal';
+  // Third Place / Final TBD — add when discovered
+  return null;
 }
 
 function compareEvents(left, right) {
@@ -212,11 +235,14 @@ function normalizeRemoteMatch(event, index) {
   const matchDate = utcMinus3Parts?.match_date || event.dateEvent || null;
   const matchTime = utcMinus3Parts?.match_time || normalizeMatchTime(event.strTime || null);
   const status = mapApiStatus(event.strStatus);
+  // Prefer intRound-based stage (authoritative from TheSportsDB), fall back
+  // to match-number-based heuristic for events without a known intRound.
+  const stage = stageFromIntRound(event.intRound) || getStageByMatchNumber(matchNumber);
 
   return {
     external_event_id: String(event.idEvent),
     match_number: matchNumber,
-    stage: getStageByMatchNumber(matchNumber),
+    stage,
     group_name: cleanGroupName(event.strGroup, matchNumber),
     home_team: translateTeamName(event.strHomeTeam),
     away_team: translateTeamName(event.strAwayTeam),
@@ -633,9 +659,12 @@ async function syncWorldCupMatches({ force = false, source = 'manual', reason = 
     let recalculatedPredictions = 0;
 
     for (const remoteMatch of normalizedMatches) {
-      // Match by external_event_id first (most reliable).
-      // Only fall back to match_number if the existing slot doesn't already
-      // belong to a different event (protects placeholders from being overwritten).
+      // Match by external_event_id first (most reliable).  This is the
+      // primary anti-duplicate mechanism: once a match has been linked to
+      // a TheSportsDB event (via external_event_id), every future sync will
+      // find it here and UPDATE it in place, preserving match_number and
+      // predictions.  Manually-created matches added outside the natural
+      // sort order MUST have external_event_id set to prevent duplicates.
       let existingMatch = byExternalId.get(remoteMatch.external_event_id);
       if (!existingMatch) {
         const byNumber = byMatchNumber.get(remoteMatch.match_number);

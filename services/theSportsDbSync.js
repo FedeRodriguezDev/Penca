@@ -187,17 +187,18 @@ function cleanGroupName(groupName, matchNumber) {
 
 function getStageByMatchNumber(matchNumber) {
   // Natural progression: groups → R32 → R16 → QF → SF → 3rd → Final
+  // For new matches inserted by the sync, the sort order by timestamp
+  // puts Third Place (Jul 18) before Final (Jul 19), so:
+  //   103 = Tercer Puesto, 104 = Final.
   // Matches 105-106 are semifinal slots that were manually positioned
-  // outside the natural sequence. The sync preserves stage for existing
-  // matches via external_event_id matching, so this function matters
-  // only for brand-new rows inserted by the sync.
+  // outside the natural sequence.
   if (matchNumber <= 72) return 'Fase de Grupos';
   if (matchNumber <= 88) return 'Ronda de 32';
   if (matchNumber <= 96) return 'Octavos de Final';
   if (matchNumber <= 100) return 'Cuartos de Final';
   if (matchNumber <= 102) return 'Semifinal';
   if (matchNumber <= 103) return 'Tercer Puesto';
-  // 104: Final (natural slot)
+  if (matchNumber <= 104) return 'Final';
   // 105-106: Semifinal (manual override slots)
   if (matchNumber <= 106) return 'Semifinal';
   return 'Final';
@@ -215,10 +216,8 @@ function stageFromIntRound(intRound) {
   if (r === 16) return 'Octavos de Final';
   if (r === 125) return 'Cuartos de Final';
   if (r === 150) return 'Semifinal';
-  // Third Place / Final — intRound values TBD.  Discover via:
-  //   eventsday.php?d=2026-07-18&l=4429  (Third Place)
-  //   eventsday.php?d=2026-07-19&l=4429  (Final)
-  // then add the intRound here and to WORLD_CUP_ROUND_NUMBERS.
+  if (r === 160) return 'Tercer Puesto';
+  if (r === 200) return 'Final';
   return null;
 }
 

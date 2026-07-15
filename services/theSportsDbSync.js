@@ -16,9 +16,12 @@ const THESPORTSDB_LOG_LEVEL = (process.env.THESPORTSDB_LOG_LEVEL || 'basic').toL
 // Known intRound values for the 2026 World Cup (discovered empirically).
 // Group stage: matchdays 1-3 only (4-6 are empty for this tournament).
 // Knockout rounds have non-sequential, arbitrary intRound values.
-// New rounds (Third Place, Final) must be added here when discovered via
-// eventsday.php?d=YYYY-MM-DD&l=4429 on the relevant dates.
+// Any new rounds (Third Place, Final, etc.) are auto-discovered via
+// eventsday.php scanning — no manual updates needed.
 const WORLD_CUP_ROUND_NUMBERS = [1, 2, 3, 32, 16, 125, 150];
+
+// How many days ahead to scan for new rounds during each sync.
+const ROUND_DISCOVERY_DAYS_AHEAD = 7;
 
 // Delay between round fetches (ms). Free API tier allows 30 req/min = 2s/req.
 // We use 2.5s to stay safely under the limit.
@@ -327,6 +330,57 @@ async function fetchWorldCupEvents({ skipKnockoutScan = false } = {}) {
     }
 
     // Respect rate limit: free tier = 30 req/min.
+    await new Promise((r) => setTimeout(r, ROUND_FETCH_DELAY_MS));
+  }
+
+  // Auto-discover new rounds via eventsday.php for upcoming dates.
+  // This catches Third Place, Final, or any rescheduled matches without
+  // requiring manual updates to WORLD_CUP_ROUND_NUMBERS.
+  const seenRoundNumbers = new Set(WORLD_CUP_ROUND_NUMBERS);
+  const today = new Date();
+  for (let offset = 0; offset < ROUND_DISCOVERY_DAYS_AHEAD; offset++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(checkDate.getDate() + offset);
+    const dateStr = checkDate.toISOString().slice(0, 10);
+
+    const dayEndpoint = `${THESPORTSDB_API_BASE}/${THESPORTSDB_API_KEY}/eventsday.php?d=${dateStr}&l=${WORLD_CUP_LEAGUE_ID}`;
+    logTheSportsDb('Auto-discovering rounds via eventsday', { date: dateStr }, 'debug');
+
+    const dayResp = await fetch(dayEndpoint, { headers: { Accept: 'application/json' } }).catch(() => null);
+    if (!dayResp?.ok) continue;
+
+    const dayPayload = await dayResp.json().catch(() => null);
+    const dayEvents = (dayPayload?.events || []).filter(e => String(e.idLeague) === WORLD_CUP_LEAGUE_ID);
+
+    for (const event of dayEvents) {
+      const ir = parseInt(event.intRound, 10);
+      if (!ir || seenRoundNumbers.has(ir)) continue;
+
+      // New round discovered!
+      seenRoundNumbers.add(ir);
+      logTheSportsDb('Nuevo intRound descubierto', { intRound: ir, date: dateStr, event: event.strEvent });
+
+      // Add events from this day directly.
+      collectedEvents.push(...dayEvents);
+
+      // Also fetch the full round via eventsround.php to catch any
+      // same-round matches on other dates.
+      const newRoundEndpoint = `${THESPORTSDB_API_BASE}/${THESPORTSDB_API_KEY}/eventsround.php?id=${WORLD_CUP_LEAGUE_ID}&r=${ir}&s=${WORLD_CUP_SEASON}`;
+      await new Promise((r) => setTimeout(r, ROUND_FETCH_DELAY_MS));
+      const newResp = await fetch(newRoundEndpoint, { headers: { Accept: 'application/json' } });
+      if (!newResp.ok) continue;
+
+      const newPayload = await newResp.json().catch(() => null);
+      const newEvents = (newPayload?.events || []).filter(e => String(e.idLeague) === WORLD_CUP_LEAGUE_ID);
+      if (newEvents.length) {
+        logTheSportsDb('Fetched newly discovered round', { intRound: ir, count: newEvents.length });
+        collectedEvents.push(...newEvents);
+      }
+      // Only process the first new round per day to avoid excessive fetches.
+      break;
+    }
+
+    // Rate-limit between day checks.
     await new Promise((r) => setTimeout(r, ROUND_FETCH_DELAY_MS));
   }
 

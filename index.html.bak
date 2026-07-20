@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO core -->
+  <title>Penca Infoclub – Pronósticos del Mundial FIFA 2026</title>
+  <meta name="description" content="Pronosticá los partidos del Mundial FIFA 2026 con Infoclub. Competí con amigos, acertá el marcador exacto y seguí tu ranking en tiempo real. ¡Gratis!">
+  <meta name="keywords" content="penca mundial 2026, pronósticos fútbol, FIFA World Cup 2026, penca uruguay, predicciones mundialistas, infoclub penca">
+  <meta name="author" content="Infoclub">
+  <meta name="application-name" content="Penca Infoclub">
+  <link rel="canonical" href="https://penca.infoclub.com.uy/">
+  <meta name="robots" content="index, follow">
+  <link rel="alternate" hreflang="es-UY" href="https://penca.infoclub.com.uy/">
+  <link rel="alternate" hreflang="es" href="https://penca.infoclub.com.uy/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://penca.infoclub.com.uy/">
+  <meta property="og:title" content="Penca Infoclub – Pronósticos del Mundial FIFA 2026">
+  <meta property="og:description" content="Pronosticá los partidos del Mundial FIFA 2026 con Infoclub. Competí con amigos, acertá el marcador exacto y seguí tu ranking en tiempo real. ¡Gratis!">
+  <meta property="og:image" content="https://penca.infoclub.com.uy/img/og-cover.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Penca Infoclub – Pronósticos del Mundial FIFA 2026">
+  <meta property="og:locale" content="es_UY">
+  <meta property="og:site_name" content="Penca Infoclub">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Penca Infoclub – Pronósticos del Mundial FIFA 2026">
+  <meta name="twitter:description" content="Pronosticá los partidos del Mundial FIFA 2026 con Infoclub. Competí con amigos, acertá el marcador exacto y seguí tu ranking en tiempo real. ¡Gratis!">
+  <meta name="twitter:image" content="https://penca.infoclub.com.uy/img/og-cover.png">
+  <meta name="twitter:image:alt" content="Penca Infoclub – Pronósticos del Mundial FIFA 2026">
+
+  <!-- PWA / Icons -->
+  <meta name="theme-color" content="#0d1e33">
+  <meta name="msapplication-TileColor" content="#0d1e33">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+  <link rel="apple-touch-icon" href="/img/logo_infoclub.png">
+
+  <!-- Structured data -->
+  <script type="application/ld+json">
+  [
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Penca Infoclub",
+      "description": "Pronosticá los partidos del Mundial FIFA 2026 con Infoclub. Competí con amigos, acertá el marcador exacto y seguí tu ranking en tiempo real.",
+      "url": "https://penca.infoclub.com.uy/",
+      "applicationCategory": "SportsApplication",
+      "operatingSystem": "Web",
+      "browserRequirements": "Requires JavaScript",
+      "inLanguage": "es-UY",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "UYU"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Infoclub",
+        "url": "https://infoclub.com.uy"
+      }
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "SportsEvent",
+      "name": "Copa Mundial de Fútbol FIFA 2026",
+      "alternateName": "FIFA World Cup 2026",
+      "sport": "Soccer",
+      "startDate": "2026-06-11",
+      "endDate": "2026-07-19",
+      "location": {
+        "@type": "Place",
+        "name": "Estados Unidos, Canadá y México"
+      },
+      "organizer": {
+        "@type": "Organization",
+        "name": "FIFA",
+        "url": "https://www.fifa.com"
+      },
+      "description": "El torneo de fútbol más grande del mundo. Pronosticá los partidos en Penca Infoclub."
+    }
+  ]
+  </script>
+
+  <!-- Performance: preconnect + preload para la fuente crítica -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;1,300;1,400&display=swap">
+  <link rel="stylesheet" href="/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;1,300;1,400&display=swap" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- Phone number input with country selector -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@24/build/css/intlTelInput.css">
+  <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@24/build/js/intlTelInputWithUtils.min.js"></script>
+</head>
+<body>
+
+<!-- Fallback for crawlers / no-JS environments -->
+<noscript>
+  <style>
+    #noscript-msg { font-family: sans-serif; max-width: 600px; margin: 60px auto; text-align: center; padding: 24px; }
+    #noscript-msg h1 { font-size: 1.6rem; margin-bottom: 12px; }
+    #noscript-msg p  { color: #555; line-height: 1.6; }
+  </style>
+  <div id="noscript-msg">
+    <h1>Penca Infoclub – Pronósticos del Mundial FIFA 2026</h1>
+    <p>
+      Pronosticá los partidos del Mundial FIFA 2026 con Infoclub.<br>
+      Competí con amigos, acertá el marcador exacto y seguí tu ranking en tiempo real.<br>
+      <strong>Para usar la aplicación necesitás JavaScript habilitado en tu navegador.</strong>
+    </p>
+    <p>Accedé desde <a href="https://penca.infoclub.com.uy/">penca.infoclub.com.uy</a></p>
+  </div>
+</noscript>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="auth-screen hidden">
+  <div class="auth-bg"></div>
+  <div class="auth-card">
+    <div class="auth-logo">⚽</div>
+    <h1 class="auth-title">PENCA INFOCLUB</h1>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="showAuthTab('login')">Iniciar Sesión</button>
+      <button class="auth-tab" onclick="showAuthTab('register')">Registrarse</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="login-form">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary btn-full" onclick="login()">Entrar</button>
+      <div class="auth-actions">
+        <button type="button" class="auth-link-btn" onclick="showForgotPassword()">¿Olvidaste tu contraseña?</button>
+      </div>
+    </div>
+
+    <!-- FORGOT PASSWORD -->
+    <div id="forgot-password-form" class="hidden">
+      <div class="register-notice">
+        Ingresá tu email y te enviaremos un enlace para cambiar la contraseña.
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="forgot-email" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <button class="btn-primary btn-full" onclick="requestPasswordReset()">Enviar enlace</button>
+      <div class="auth-actions">
+        <button type="button" class="auth-link-btn" onclick="showAuthTab('login')">Volver al login</button>
+      </div>
+    </div>
+
+    <!-- RESET PASSWORD -->
+    <div id="reset-password-form" class="hidden">
+      <div class="register-notice">
+        Definí tu nueva contraseña para ingresar a la penca.
+      </div>
+      <input type="hidden" id="reset-token">
+      <div class="field">
+        <label>Nueva contraseña</label>
+        <input type="password" id="reset-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label>Confirmar contraseña</label>
+        <input type="password" id="reset-password-confirm" placeholder="Repetí tu contraseña" autocomplete="new-password">
+      </div>
+      <button class="btn-primary btn-full" onclick="submitPasswordReset()">Guardar nueva contraseña</button>
+      <div class="auth-actions">
+        <button type="button" class="auth-link-btn" onclick="showAuthTab('login')">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="register-form" class="hidden">
+      <div class="register-notice">
+        📧 Te enviaremos un email de verificación. Asegurate de ingresar un correo al que tengas acceso.
+      </div>
+      <div class="field">
+        <label>Nombre de usuario</label>
+        <input type="text" id="reg-username" placeholder="Tu apodo en la penca">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Teléfono</label>
+        <input type="tel" id="reg-phone" placeholder="Número de teléfono" autocomplete="tel" required>
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label>Confirmar contraseña</label>
+        <input type="password" id="reg-password-confirm" placeholder="Repetí tu contraseña" autocomplete="new-password">
+      </div>
+      <button class="btn-primary btn-full" onclick="register()">Crear Cuenta</button>
+    </div>
+
+    <!-- REGISTRO EXITOSO -->
+    <div id="register-success" class="hidden">
+      <div class="register-success-icon">📬</div>
+      <h3 class="register-success-title">¡Revisá tu correo!</h3>
+      <p class="register-success-body">
+        Te enviamos un email de verificación a <strong id="register-success-email"></strong>.
+        Hacé clic en el enlace del mail para activar tu cuenta y poder ingresar.
+      </p>
+      <p class="register-success-hint">Si no lo ves, revisá la carpeta de spam.</p>
+      <button class="btn-primary btn-full" onclick="showAuthTab('login')">Ir al inicio de sesión</button>
+    </div>
+
+    <div id="auth-msg" class="auth-msg hidden"></div>
+  </div>
+  <div class="auth-corner-logo-wrap">
+    <img src="/img/logo_infoclub.png" alt="Infoclub" class="auth-corner-logo">
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" class="hidden">
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="nav-brand"> <img src="/img/logo_infoclub.png" alt="Infoclub" class="nav-logo-img"> <span>PENCA</span></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showPage('matches')" data-page="matches">Partidos</button>
+      <button class="nav-tab" onclick="showPage('leaderboard')" data-page="leaderboard">Tabla</button>
+      <button class="nav-tab" onclick="showPage('premios')" data-page="premios">Premios</button>
+      <button class="nav-tab" id="admin-tab" onclick="showPage('admin')" data-page="admin" style="display:none">Admin</button>
+    </div>
+    <div class="nav-user">
+      <span id="nav-username"></span>
+      <button class="btn-logout" onclick="logout()">Salir</button>
+    </div>
+  </nav>
+
+  <!-- BOTTOM TAB BAR (mobile only) -->
+  <nav class="nav-tabs-mobile" aria-label="Navegación principal">
+    <button class="nav-tab active" onclick="showPage('matches')" data-page="matches"><i class="tab-icon bi bi-calendar-week"></i><span class="tab-label">Partidos</span></button>
+    <button class="nav-tab" onclick="showPage('leaderboard')" data-page="leaderboard"><i class="tab-icon bi bi-bar-chart-line"></i><span class="tab-label">Tabla</span></button>
+    <button class="nav-tab" onclick="showPage('premios')" data-page="premios"><i class="tab-icon bi bi-gift"></i><span class="tab-label">Premios</span></button>
+    <button class="nav-tab" id="admin-tab-mobile" onclick="showPage('admin')" data-page="admin" style="display:none"><i class="tab-icon bi bi-gear"></i><span class="tab-label">Admin</span></button>
+  </nav>
+
+  <!-- PAGES -->
+  <main class="main-content">
+
+    <!-- MATCHES PAGE -->
+    <div id="page-matches" class="page">
+      <div class="page-header">
+        <h2>Mis Pronósticos</h2>
+        <p class="page-desc">Completá el marcador de cada partido antes de que empiece. <strong>Exacto = 3 pts · Resultado = 1 pt</strong></p>
+      </div>
+      <div class="group-filter" id="group-filter"></div>
+      <div id="matches-container"></div>
+    </div>
+
+    <!-- LEADERBOARD PAGE -->
+    <div id="page-leaderboard" class="page hidden">
+      <div class="page-header">
+        <h2>Tabla de Posiciones</h2>
+      </div>
+      <div id="stats-bar" class="stats-bar"></div>
+      <div id="leaderboard-container"></div>
+    </div>
+
+    <!-- PREMIOS PAGE -->
+    <div id="page-premios" class="page hidden">
+      <div class="page-header">
+        <h2>Premios</h2>
+        <p class="page-desc">Los mejores pronosticadores del Mundial 2026 se llevan los premios. ¡Pronosticá mejor que todos!</p>
+      </div>
+      <div class="premios-grid">
+        <div class="premio-card premio-oro">
+          <img src="img/notebook.png" alt="Notebook ASUS i3">
+          <!-- <div class="premio-icon">🥇</div> -->
+          <div class="premio-rank">1er Puesto</div>
+          <div class="premio-desc">Notebook ASUS i3</div>
+        </div>
+        <div class="premio-card premio-plata">
+          <img src="img/parlante.png" alt="Parlante Bluetooth Thonet & Vander">
+          <!-- <div class="premio-icon">🥈</div> -->
+          <div class="premio-rank">2do Puesto</div>
+          <div class="premio-desc">Parlante Bluetooth Thonet & Vander</div>
+        </div>
+        <div class="premio-card premio-bronce">
+          <img src="img/auriculares.png" alt="Auriculares Bluetooth Nokia">
+          <!-- <div class="premio-icon">🥉</div> -->
+          <div class="premio-rank">3er Puesto</div>
+          <div class="premio-desc">Auriculares Bluetooth Nokia</div>
+        </div>
+      </div>
+      <div class="premios-reglas">
+        <h3>Sistema de puntos</h3>
+        <div class="regla-item">
+          <span class="regla-pts regla-pts-exacto">3 pts</span>
+          <span class="regla-label">Marcador exacto</span>
+        </div>
+        <div class="regla-item">
+          <span class="regla-pts regla-pts-resultado">1 pt</span>
+          <span class="regla-label">Resultado correcto (ganador o empate)</span>
+        </div>
+        <div class="regla-item">
+          <span class="regla-pts regla-pts-incorrecto">0 pts</span>
+          <span class="regla-label">Pronóstico incorrecto</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN PAGE -->
+    <div id="page-admin" class="page hidden">
+      <div class="page-header">
+        <h2>Panel de Administrador</h2>
+        <p class="page-desc">Cargá resultados y horarios de inicio. Cuando un partido tiene fecha y hora, la penca deja de aceptar pronósticos al momento del arranque.</p>
+      </div>
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="showAdminTab('results')">Cargar Resultados</button>
+        <button class="admin-tab" onclick="showAdminTab('add-match')">Agregar Partido</button>
+        <button class="admin-tab" onclick="showAdminTab('users')">Usuarios</button>
+      </div>
+      <div id="admin-results" class="admin-section">
+        <div id="admin-matches-list"></div>
+      </div>
+      <div id="admin-add-match" class="admin-section hidden">
+        <div class="card">
+          <h3>Agregar Partido (Eliminatorias)</h3>
+          <div class="grid-2">
+            <div class="field"><label>Número de partido</label><input type="number" id="am-num" placeholder="73"></div>
+            <div class="field"><label>Fase</label>
+              <select id="am-stage">
+                <option>Ronda de 32</option><option>Octavos de Final</option>
+                <option>Cuartos de Final</option><option>Semifinal</option>
+                <option>Tercer Puesto</option><option>Final</option>
+              </select>
+            </div>
+            <div class="field"><label>Equipo Local</label><input type="text" id="am-home" placeholder="Argentina"></div>
+            <div class="field"><label>Equipo Visitante</label><input type="text" id="am-away" placeholder="Brasil"></div>
+            <div class="field"><label>Fecha</label><input type="date" id="am-date"></div>
+            <div class="field"><label>Hora de inicio</label><input type="time" id="am-time"></div>
+            <div class="field"><label>Sede</label><input type="text" id="am-venue" placeholder="MetLife Stadium"></div>
+            <div class="field"><label>Ciudad</label><input type="text" id="am-city" placeholder="Nueva York"></div>
+          </div>
+          <button class="btn-primary" onclick="addMatch()">Agregar Partido</button>
+          <div id="admin-add-msg" class="auth-msg hidden" style="margin-top:12px"></div>
+        </div>
+      </div>
+      <div id="admin-users" class="admin-section hidden">
+        <div id="users-list"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
